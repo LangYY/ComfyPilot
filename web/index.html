@@ -1,0 +1,243 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>LTX Storyboard Batch Console</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/assets/styles.css">
+  </head>
+  <body>
+    <div class="page-shell">
+      <header class="hero">
+        <div>
+          <p class="eyebrow">ComfyUI + LTX 2.3</p>
+          <h1>Storyboard Batch Console</h1>
+          <p class="hero-copy">
+            上传 storyboard，编辑 prompts，校验 workflow，最后一键批量生成 12 段视频。
+          </p>
+        </div>
+        <div class="hero-status">
+          <span id="status-badge" class="badge idle">Idle</span>
+          <button id="refresh-btn" class="ghost-button" type="button">刷新面板</button>
+        </div>
+      </header>
+
+      <main class="grid">
+        <section class="panel">
+          <div class="panel-head">
+            <h2>1. Storyboard</h2>
+            <p>上传总图并切成 12 张起始图。</p>
+          </div>
+          <form id="storyboard-form" class="stack">
+            <input id="storyboard-file" type="file" accept=".png,image/png" required>
+            <div class="mini-grid">
+              <label>
+                <span>Rows</span>
+                <input id="rows" type="number" value="4" min="1">
+              </label>
+              <label>
+                <span>Cols</span>
+                <input id="cols" type="number" value="3" min="1">
+              </label>
+              <label>
+                <span>Margin</span>
+                <input id="margin" type="number" value="0" min="0" step="0.5">
+              </label>
+              <label>
+                <span>Gutter</span>
+                <input id="gutter" type="number" value="0" min="0" step="0.5">
+              </label>
+            </div>
+            <button class="accent-button" type="submit">上传并切图</button>
+          </form>
+          <div id="cells-grid" class="cells-grid"></div>
+        </section>
+
+        <section class="panel">
+          <div class="panel-head">
+            <h2>2. Prompts</h2>
+            <p>上传或直接编辑 `data/prompts.json`。</p>
+          </div>
+          <div class="stack">
+            <div class="inline-actions">
+              <input id="prompts-file" type="file" accept=".json,application/json">
+              <button id="upload-prompts-btn" class="ghost-button" type="button">上传 prompts.json</button>
+              <button id="save-prompts-btn" class="accent-button" type="button">保存 prompts</button>
+            </div>
+            <textarea id="prompts-text" class="code-box" spellcheck="false"></textarea>
+          </div>
+        </section>
+
+        <section class="panel">
+          <div class="panel-head">
+            <h2>3. Workflow 与配置</h2>
+            <p>通常只需要上传 workflow，并填写 ComfyUI Output Dir。其余设置默认自动处理。</p>
+          </div>
+          <div class="stack">
+            <div class="inline-actions">
+              <input id="workflow-file" type="file" accept=".json,application/json">
+              <button id="upload-workflow-btn" class="ghost-button" type="button">上传 workflow</button>
+              <button id="validate-workflow-btn" class="ghost-button" type="button">校验节点映射</button>
+              <button id="save-config-btn" class="accent-button" type="button">保存配置</button>
+            </div>
+            <div class="inline-tip">
+              <strong>最少必填：</strong>
+              <span>`ComfyUI Output Dir`。如果你的 ComfyUI 不在默认端口，再改 `ComfyUI URL`。</span>
+            </div>
+            <div class="mini-grid basic-grid">
+              <label>
+                <span>ComfyUI URL</span>
+                <input id="comfyui-base-url" type="text">
+              </label>
+              <label>
+                <span>ComfyUI Output Dir</span>
+                <input id="comfyui-output-dir" type="text">
+              </label>
+            </div>
+            <details class="advanced-block">
+              <summary>高级设置</summary>
+              <div class="stack advanced-inner">
+                <div class="mini-grid">
+                  <label>
+                    <span>Save Prefix Root</span>
+                    <input id="save-prefix-root" type="text">
+                  </label>
+                  <label>
+                    <span>Upload Subfolder</span>
+                    <input id="upload-subfolder" type="text">
+                  </label>
+                  <label>
+                    <span>Seed Base</span>
+                    <input id="seed-base" type="number">
+                  </label>
+                  <label>
+                    <span>Poll Interval</span>
+                    <input id="poll-interval-seconds" type="number" min="1">
+                  </label>
+                  <label>
+                    <span>Timeout Seconds</span>
+                    <input id="timeout-seconds" type="number" min="10">
+                  </label>
+                </div>
+                <div class="inline-tip">
+                  <strong>节点映射通常可自动识别：</strong>
+                  <span>只有当 workflow 里有多个同类节点，或者自动识别失败时，才需要手动填写下面这些高级项。</span>
+                </div>
+                <div class="mini-grid">
+                  <label>
+                    <span>LoadImage Node ID</span>
+                    <input id="image-node-id" type="text">
+                  </label>
+                  <label>
+                    <span>Image Input Name</span>
+                    <input id="image-input-name" type="text">
+                  </label>
+                  <label>
+                    <span>Upload Flag Input</span>
+                    <input id="upload-input-name" type="text">
+                  </label>
+                  <label>
+                    <span>Upload Flag Value</span>
+                    <input id="upload-value" type="text">
+                  </label>
+                  <label>
+                    <span>Positive Prompt Node ID</span>
+                    <input id="prompt-node-id" type="text">
+                  </label>
+                  <label>
+                    <span>Prompt Input Name</span>
+                    <input id="prompt-input-name" type="text">
+                  </label>
+                  <label>
+                    <span>Save Video Node ID</span>
+                    <input id="save-node-id" type="text">
+                  </label>
+                  <label>
+                    <span>Save Input Name</span>
+                    <input id="save-input-name" type="text">
+                  </label>
+                </div>
+                <label class="full-width">
+                  <span>Seed Nodes JSON</span>
+                  <textarea id="seed-nodes-json" class="mini-code" spellcheck="false"></textarea>
+                </label>
+              </div>
+            </details>
+            <pre id="validation-box" class="status-box">等待校验 workflow...</pre>
+          </div>
+        </section>
+
+        <section class="panel">
+          <div class="panel-head">
+            <h2>4. 批量执行</h2>
+            <p>支持断点续跑，输出自动归档到 `outputs/`。</p>
+          </div>
+          <div class="stack">
+            <div class="mini-grid">
+              <label>
+                <span>Start Index</span>
+                <input id="start-index" type="number" min="1" value="1">
+              </label>
+              <label>
+                <span>End Index</span>
+                <input id="end-index" type="number" min="1" value="12">
+              </label>
+              <label class="checkbox-line">
+                <input id="overwrite" type="checkbox">
+                <span>Overwrite existing outputs</span>
+              </label>
+            </div>
+            <div class="inline-actions">
+              <button id="start-run-btn" class="accent-button" type="button">开始批处理</button>
+              <button id="stop-run-btn" class="ghost-button danger-button" type="button">停止</button>
+            </div>
+            <div id="progress-strip" class="progress-strip">
+              <div id="progress-bar" class="progress-bar"></div>
+            </div>
+            <div id="summary-cards" class="summary-cards"></div>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Index</th>
+                    <th>Status</th>
+                    <th>Output</th>
+                    <th>Prompt ID</th>
+                    <th>Error</th>
+                  </tr>
+                </thead>
+                <tbody id="jobs-body"></tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <section class="panel">
+          <div class="panel-head">
+            <h2>5. Logs</h2>
+            <p>后台任务日志会持续刷新。</p>
+          </div>
+          <pre id="logs-box" class="status-box tall"></pre>
+        </section>
+
+        <section class="panel">
+          <div class="panel-head">
+            <h2>6. Outputs</h2>
+            <p>点击可直接打开生成好的 mp4。</p>
+          </div>
+          <div id="outputs-list" class="outputs-list"></div>
+          <div class="panel-head fail-head">
+            <h2>Failed Jobs</h2>
+            <p>失败记录来自 `failed_jobs.json`。</p>
+          </div>
+          <pre id="failed-box" class="status-box"></pre>
+        </section>
+      </main>
+    </div>
+
+    <script src="/assets/app.js"></script>
+  </body>
+  </html>

@@ -1,0 +1,21 @@
+.venv/
+**/__pycache__/
+*.pyc
+*.pyo
+
+# Runtime state and generated media
+studio_v2_data/
+outputs/
+cells/
+failed_jobs.json
+storyboard_3x4.png
+*.mp4
+*.mov
+*.webm
+
+!cells/.gitkeep
+
+!outputs/.gitkeep
+
+# Local-only workflow/runtime secrets or machine paths can be copied from examples.
+*.local.json

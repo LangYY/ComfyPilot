@@ -1,0 +1,427 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>ComfyPilot | ComfyUI 视频批量生成工作台</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&family=Plus+Jakarta+Sans:wght@600;700;800&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@200..700,0..1&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/assets-v2/styles.css">
+  </head>
+  <body data-active-tab="submit">
+    <header class="topbar">
+      <div class="brand-title">ComfyPilot</div>
+      <nav class="top-tabs" aria-label="主导航">
+        <button class="top-tab active" type="button" data-tab="submit">Submit Work</button>
+        <button class="top-tab" type="button" data-tab="queue">Queue / History</button>
+      </nav>
+      <div class="top-actions">
+        <div class="search-shell">
+          <span class="material-symbols-outlined">search</span>
+          <input id="workflow-search" class="search-input" type="search" placeholder="Search workflows...">
+        </div>
+        <div id="queue-badge" class="status-pill idle">空闲</div>
+        <button id="access-info-btn" type="button" class="icon-button" title="访问方式">
+          <span class="material-symbols-outlined">lan</span>
+        </button>
+        <button id="refresh-btn" type="button" class="icon-button" title="刷新">
+          <span class="material-symbols-outlined">refresh</span>
+        </button>
+        <div id="access-info-box" class="access-popover hidden"></div>
+      </div>
+    </header>
+
+    <main class="app-shell">
+      <section id="submit-panel" class="tab-panel">
+        <div class="submit-layout">
+          <aside class="submit-left">
+            <section class="glass-panel studio-node">
+              <div class="node-title">
+                <span class="material-symbols-outlined node-icon">account_tree</span>
+                <div>
+                  <h2>Workflow Selection</h2>
+                  <p>选择已保存的 API workflow，或上传新的 ComfyUI workflow JSON。</p>
+                </div>
+              </div>
+
+              <label>
+                <span>Active Profile</span>
+                <select id="draft-profile-id"></select>
+              </label>
+
+              <form id="profile-form" class="stack tight-stack">
+                <label class="drop-zone">
+                  <span>Upload New Workflow (.json)</span>
+                  <input id="workflow-file" type="file" accept=".json,application/json">
+                  <small id="workflow-file-status">选择从 ComfyUI 导出的 API workflow JSON。上传后会保存为可复用 Profile。</small>
+                </label>
+                <label>
+                  <span>Profile Name</span>
+                  <input id="profile-name" type="text" placeholder="例如：LTX 2.3 i2v production">
+                </label>
+
+                <details class="advanced-block">
+                  <summary>节点映射修正（通常不用填）</summary>
+                  <div class="mini-grid two">
+                    <label>
+                      <span>SaveVideo Node ID</span>
+                      <input id="save-node-id" type="text" placeholder="例如：75">
+                    </label>
+                    <label>
+                      <span>保存字段名</span>
+                      <input id="save-input-name" type="text" value="filename_prefix">
+                    </label>
+                  </div>
+                </details>
+
+                <button type="submit" class="ghost-action full-button">保存 Workflow Profile</button>
+              </form>
+              <pre id="profiles-box" class="meta-box compact"></pre>
+            </section>
+
+            <section class="glass-panel studio-node">
+              <div class="node-title">
+                <span class="material-symbols-outlined node-icon">terminal</span>
+                <div>
+                  <h2>Runtime Settings</h2>
+                  <p>这些是运行参数，不会拼进 prompt 文本。</p>
+                </div>
+              </div>
+
+              <form id="settings-form" class="stack tight-stack">
+                <label>
+                  <span>Backend URL</span>
+                  <input id="comfyui-base-url" type="text" value="http://127.0.0.1:8189">
+                </label>
+                <div class="runtime-profile-box">
+                  <div>
+                    <label>
+                      <span>ComfyUI Docker 模式</span>
+                      <select id="comfyui-runtime-profile">
+                        <option value="stable">稳定优先：低显存 / 最稳 / 慢</option>
+                        <option value="balanced">均衡模式：日常默认</option>
+                        <option value="performance">性能优先：最快 / 更容易 OOM</option>
+                      </select>
+                    </label>
+                    <small id="comfyui-runtime-status">正在读取 Docker / GPU 状态...</small>
+                  </div>
+                  <div class="runtime-actions">
+                    <button id="apply-comfyui-runtime-btn" type="button" class="ghost-action">应用模式</button>
+                    <button id="diagnose-comfyui-btn" type="button" class="ghost-action">诊断 OOM</button>
+                  </div>
+                  <pre id="comfyui-runtime-output" class="runtime-output hidden"></pre>
+                </div>
+                <label>
+                  <span>ComfyUI 保存子目录</span>
+                  <input id="comfyui-output-dir" type="text" placeholder="例如：video/batch_studio_v2">
+                  <small>这是 SaveVideo 的相对子目录，不是 E 盘绝对路径。若要保存到 E 盘，请在 ComfyUI 启动参数里设置 output-directory。</small>
+                </label>
+                <div class="mini-grid two">
+                  <label>
+                    <span>文件名前缀</span>
+                    <input id="output-name-prefix" type="text" placeholder="例如：0523_zodiac_">
+                  </label>
+                  <label>
+                    <span>尺寸预设</span>
+                    <select id="size-preset">
+                      <option value="1280x720">1280 x 720 (16:9)</option>
+                      <option value="720x1280">720 x 1280 (9:16)</option>
+                      <option value="1920x1080">1920 x 1080 (16:9)</option>
+                      <option value="1080x1920">1080 x 1920 (9:16)</option>
+                      <option value="1024x1024">1024 x 1024 (1:1)</option>
+                      <option value="custom">自定义</option>
+                    </select>
+                  </label>
+                </div>
+
+                <div class="mini-grid two">
+                  <label>
+                    <span>输出宽度</span>
+                    <input id="width-pixels" type="number" min="1" placeholder="1280">
+                  </label>
+                  <label>
+                    <span>输出高度</span>
+                    <input id="height-pixels" type="number" min="1" placeholder="720">
+                  </label>
+                </div>
+
+                <div class="mini-grid two">
+                  <label>
+                    <span>Seed 模式</span>
+                    <select id="seed-mode">
+                      <option value="random">随机 seed</option>
+                      <option value="fixed">固定 seed</option>
+                    </select>
+                  </label>
+                  <label id="seed-fixed-field" class="hidden">
+                    <span>固定 Seed</span>
+                    <input id="seed-fixed" type="number" value="1">
+                  </label>
+                </div>
+
+                <label>
+                  <span>Negative Prompt</span>
+                  <textarea id="negative-prompt-text" rows="3" placeholder="可选，例如：text, watermark, low quality"></textarea>
+                </label>
+
+                <button type="submit" class="ghost-action full-button">保存运行参数</button>
+                <div id="settings-status" class="summary-text"></div>
+              </form>
+            </section>
+          </aside>
+
+          <section class="submit-main">
+            <section class="glass-panel generation-panel">
+              <div class="mode-strip">
+                <button type="button" class="mode-pill active" data-mode="t2v">Text to Video</button>
+                <button type="button" class="mode-pill" data-mode="i2v_storyboard">Image to Video · 切图</button>
+                <button type="button" class="mode-pill" data-mode="i2v_first_batch">I2V · 首帧</button>
+                <button type="button" class="mode-pill" data-mode="i2v_first_last_batch">首尾帧</button>
+                <button type="button" class="mode-pill" data-mode="i2v_first_last_continuous">连续首尾帧</button>
+              </div>
+
+              <form id="draft-form" class="stack generation-body">
+                <input id="draft-mode" type="hidden" value="t2v">
+                <div id="upload-checklist" class="upload-checklist"></div>
+
+                <label>
+                  <span>Positive Prompts JSON</span>
+                  <textarea id="prompts-text" class="code-box prompt-box" spellcheck="false" placeholder='["第一条完整 prompt", "第二条完整 prompt"]'></textarea>
+                </label>
+                <div class="inline-actions">
+                  <input id="prompts-file" type="file" accept=".json,application/json">
+                  <span id="prompts-input-status" class="hint">必需：粘贴 prompt JSON，或上传 prompts.json。</span>
+                </div>
+
+                <div id="storyboard-fields" class="mode-fields stack hidden">
+                  <label>
+                    <span>Storyboard 图片</span>
+                    <input id="storyboard-file" type="file" accept=".png,.jpg,.jpeg,.webp,.bmp,image/*">
+                    <small>上传一张网格图，系统会按行列切成首帧图。</small>
+                  </label>
+                  <div class="mini-grid five">
+                    <label><span>Rows</span><input id="rows" type="number" value="4" min="1"></label>
+                    <label><span>Cols</span><input id="cols" type="number" value="3" min="1"></label>
+                    <label><span>切图数量</span><input id="storyboard-cell-count" type="number" value="12" min="1"></label>
+                    <label><span>Margin</span><input id="margin" type="number" value="0" min="0" step="0.5"></label>
+                    <label><span>Gutter</span><input id="gutter" type="number" value="0" min="0" step="0.5"></label>
+                  </div>
+                </div>
+
+                <div id="first-batch-fields" class="mode-fields stack hidden">
+                  <label>
+                    <span>批量首帧图片</span>
+                    <input id="first-image-files" type="file" multiple accept=".png,.jpg,.jpeg,.webp,.bmp,image/*">
+                    <small>支持 jpg / png / webp / bmp。文件按名称自然排序。</small>
+                  </label>
+                </div>
+
+                <div id="first-last-fields" class="mode-fields stack hidden">
+                  <label>
+                    <span>首帧图片组</span>
+                    <input id="first-frame-files" type="file" multiple accept=".png,.jpg,.jpeg,.webp,.bmp,image/*">
+                  </label>
+                  <label id="last-frame-upload">
+                    <span>尾帧图片组</span>
+                    <input id="last-frame-files" type="file" multiple accept=".png,.jpg,.jpeg,.webp,.bmp,image/*">
+                    <small>普通首尾帧模式下，首帧数量和尾帧数量必须一致。</small>
+                  </label>
+                  <small id="continuous-note" class="field-note hidden">连续模式只上传一组图片：1-2、2-3、3-4 会自动组成连续首尾帧任务。</small>
+                </div>
+
+                <div class="action-row">
+                  <button id="create-draft-btn" type="submit" class="ghost-action">生成批次预览</button>
+                  <span class="summary-text">先生成预览，再选择暂存或立即提交。</span>
+                </div>
+              </form>
+            </section>
+
+            <section class="glass-panel preview-panel">
+              <div class="panel-headline">
+                <div>
+                  <h2>Batch Queue Preview</h2>
+                  <p>提交前确认任务数、输出名、seed、素材和最终 prompt。</p>
+                </div>
+                <span id="draft-status" class="status-pill idle">还没有批次预览</span>
+              </div>
+              <div class="table-wrap preview-table">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>#</th>
+                      <th>Seed</th>
+                      <th>输出文件</th>
+                      <th>输入素材</th>
+                      <th>Prompt</th>
+                    </tr>
+                  </thead>
+                  <tbody id="draft-tasks-body"></tbody>
+                </table>
+              </div>
+              <div class="bottom-actions">
+                <button id="plan-draft-btn" type="button" class="ghost-action" disabled>保存到计划箱</button>
+                <button id="submit-draft-btn" type="button" class="primary-action" disabled>
+                  <span class="material-symbols-outlined">play_arrow</span>
+                  立即提交队列
+                </button>
+              </div>
+            </section>
+          </section>
+        </div>
+      </section>
+
+      <section id="queue-panel" class="tab-panel hidden queue-stage">
+        <aside class="queue-sidebar">
+          <div class="suite-card">
+            <div class="avatar-sigil">CP</div>
+            <div>
+              <p class="suite-eyebrow">ComfyPilot</p>
+              <h2>Queue Control</h2>
+              <p class="suite-state"><span></span> Local Session</p>
+            </div>
+          </div>
+          <nav class="side-nav" aria-label="队列导航">
+            <button type="button" class="side-nav-item active" data-queue-view="dashboard">
+              <span class="nav-orb"><span class="material-symbols-outlined">dashboard</span></span>
+              <span class="side-nav-text">
+                <strong>Dashboard</strong>
+                <small>运行队列与历史</small>
+              </span>
+            </button>
+            <button type="button" class="side-nav-item" data-queue-view="planbox">
+              <span class="nav-orb"><span class="material-symbols-outlined">pending_actions</span></span>
+              <span class="side-nav-text">
+                <strong>Planbox</strong>
+                <small>暂存批次与预约</small>
+              </span>
+            </button>
+          </nav>
+          <div class="gpu-card">
+            <div class="worker-card-head">
+              <p>ComfyUI Worker</p>
+              <span>8189</span>
+            </div>
+            <div class="gpu-meter"><span></span></div>
+            <small>Single worker · prompt queue</small>
+          </div>
+        </aside>
+
+        <div class="queue-main">
+          <section id="queue-dashboard-view" class="queue-view">
+            <header class="queue-titlebar">
+              <div>
+                <h1>Queue Dashboard</h1>
+                <p id="queue-summary">正在读取队列状态...</p>
+              </div>
+              <button id="stop-all-btn" type="button" class="danger-action">Stop All</button>
+            </header>
+
+            <div class="summary-grid">
+              <article class="metric-card">
+                <span class="material-symbols-outlined">pending_actions</span>
+                <strong id="queue-active-count">0</strong>
+                <p>Active Runs</p>
+              </article>
+              <article class="metric-card">
+                <span class="material-symbols-outlined">inventory_2</span>
+                <strong id="queue-planned-count">0</strong>
+                <p>Planbox</p>
+              </article>
+              <article class="metric-card">
+                <span class="material-symbols-outlined">task_alt</span>
+                <strong id="queue-completed-count">0</strong>
+                <p>Completed</p>
+              </article>
+              <article class="metric-card critical">
+                <span class="material-symbols-outlined">report</span>
+                <strong id="queue-failed-count">0</strong>
+                <p>Need Attention</p>
+              </article>
+            </div>
+
+            <div class="queue-dashboard-stack">
+              <section class="glass-panel queue-card">
+                <div class="card-toolbar">
+                  <h2>Active Queue</h2>
+                  <small>批次级队列。点击“详情”在当前批次下方展开 12 条任务。</small>
+                </div>
+                <div class="table-wrap">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>Run</th>
+                        <th>状态</th>
+                        <th>批次</th>
+                        <th>创建时间</th>
+                        <th>任务进度</th>
+                        <th>操作</th>
+                      </tr>
+                    </thead>
+                    <tbody id="active-runs-body"></tbody>
+                  </table>
+                </div>
+              </section>
+
+              <section class="glass-panel queue-card">
+                <div class="card-toolbar">
+                  <h2>History</h2>
+                  <small>已完成、失败、停止、取消或中断的运行记录。</small>
+                </div>
+                <div class="table-wrap">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>Run</th>
+                        <th>状态</th>
+                        <th>批次</th>
+                        <th>创建时间</th>
+                        <th>任务进度</th>
+                        <th>操作</th>
+                      </tr>
+                    </thead>
+                    <tbody id="runs-body"></tbody>
+                  </table>
+                </div>
+              </section>
+            </div>
+          </section>
+
+          <section id="queue-planbox-view" class="queue-view hidden">
+            <header class="queue-titlebar">
+              <div>
+                <h1>Planbox</h1>
+                <p>暂存但不启动的批次，适合等电脑空闲时再运行。点击“详情”直接在批次下方展开任务。</p>
+              </div>
+            </header>
+
+            <section class="glass-panel queue-card">
+              <div class="card-toolbar">
+                <h2>Planned Batches</h2>
+                <small>保存到计划箱的批次不会自动提交，除非你点击启动或设置预约。</small>
+              </div>
+              <div class="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Batch</th>
+                      <th>状态</th>
+                      <th>创建时间</th>
+                      <th>任务数</th>
+                      <th>计划</th>
+                      <th>操作</th>
+                    </tr>
+                  </thead>
+                  <tbody id="planned-batches-body"></tbody>
+                </table>
+              </div>
+            </section>
+          </section>
+        </div>
+      </section>
+    </main>
+
+    <script src="/assets-v2/app.js"></script>
+  </body>
+</html>
