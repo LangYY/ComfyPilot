@@ -1,0 +1,19 @@
+services:
+  comfyui:
+    image: comfyui_cu128_v0812_fixed2_20260512:latest
+    container_name: comfyui_cu128_update
+    entrypoint: []
+    ports:
+      - "8189:8188"
+    gpus:
+      - count: all
+        capabilities: ["gpu"]   # 明确声明能力（更通用）
+    shm_size: "16g"
+    environment:
+      - PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
+    volumes:
+      - "E:/AI_models:/app/models"
+      - "D:/ComfyUI_Runtime/input:/app/input"
+      - "D:/ComfyUI_Runtime/output:/app/output"
+      - "D:/ComfyUI_Runtime/cache:/app/cache"
+    restart: unless-stopped
