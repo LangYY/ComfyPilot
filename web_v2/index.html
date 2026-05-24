@@ -250,6 +250,7 @@
                 <table>
                   <thead>
                     <tr>
+                      <th><input id="draft-select-all" type="checkbox" checked title="选择全部任务"></th>
                       <th>#</th>
                       <th>Seed</th>
                       <th>输出文件</th>
@@ -261,6 +262,14 @@
                 </table>
               </div>
               <div class="bottom-actions">
+                <label class="submit-scope-control">
+                  <span>提交范围</span>
+                  <select id="draft-submit-scope">
+                    <option value="all">全部任务</option>
+                    <option value="selected">仅勾选任务</option>
+                  </select>
+                </label>
+                <span id="draft-selection-status" class="summary-text">默认提交全部任务</span>
                 <button id="plan-draft-btn" type="button" class="ghost-action" disabled>保存到计划箱</button>
                 <button id="submit-draft-btn" type="button" class="primary-action" disabled>
                   <span class="material-symbols-outlined">play_arrow</span>
@@ -421,6 +430,19 @@
         </div>
       </section>
     </main>
+
+    <div id="media-preview-modal" class="media-preview-modal hidden" role="dialog" aria-modal="true" aria-label="页面内预览">
+      <div class="media-preview-backdrop" data-preview-close></div>
+      <section class="media-preview-shell">
+        <header>
+          <strong id="media-preview-title">预览</strong>
+          <button id="media-preview-close" type="button" class="icon-button" data-preview-close title="关闭">
+            <span class="material-symbols-outlined">close</span>
+          </button>
+        </header>
+        <div id="media-preview-body" class="media-preview-body"></div>
+      </section>
+    </div>
 
     <script src="/assets-v2/app.js"></script>
   </body>

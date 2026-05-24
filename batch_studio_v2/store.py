@@ -707,6 +707,7 @@ class StudioStore:
         draft_id: str,
         *,
         status: str = "queued",
+        selected_task_ids: list[str] | None = None,
     ) -> dict[str, Any]:
         draft = self.load_draft(project_id, draft_id)
         batch_id = make_id("batch")
@@ -719,6 +720,7 @@ class StudioStore:
         if (draft_dir / "source").exists():
             copy_tree(draft_dir / "source", batch_dir / "source")
 
+        tasks = self._selected_tasks(draft["tasks"], selected_task_ids)
         manifest = {
             "id": batch_id,
             "project_id": project_id,
@@ -731,8 +733,10 @@ class StudioStore:
             "latest_run_id": "",
             "schedule": None,
             "runtime_settings": dict(draft["runtime_settings"]),
-            "tasks": json.loads(json.dumps(draft["tasks"], ensure_ascii=False)),
-            "task_count": int(draft["task_count"]),
+            "tasks": tasks,
+            "task_count": len(tasks),
+            "source_task_count": int(draft["task_count"]),
+            "selected_task_ids": selected_task_ids or [],
         }
         save_json(self._batch_manifest_path(project_id, batch_id), manifest)
 
@@ -741,7 +745,24 @@ class StudioStore:
         self.save_draft(draft)
         return manifest
 
-    def create_run_from_batch(self, project_id: str, batch_id: str, *, reason: str = "new") -> dict[str, Any]:
+    def _selected_tasks(self, tasks: list[dict[str, Any]], selected_task_ids: list[str] | None = None) -> list[dict[str, Any]]:
+        if not selected_task_ids:
+            selected = tasks
+        else:
+            wanted = {str(item) for item in selected_task_ids if str(item).strip()}
+            selected = [task for task in tasks if str(task.get("task_id", "")) in wanted]
+            if not selected:
+                raise ValueError("No matching tasks were selected.")
+        return json.loads(json.dumps(selected, ensure_ascii=False))
+
+    def create_run_from_batch(
+        self,
+        project_id: str,
+        batch_id: str,
+        *,
+        reason: str = "new",
+        selected_task_ids: list[str] | None = None,
+    ) -> dict[str, Any]:
         batch = self.load_batch(project_id, batch_id)
         if reason == "planned" and batch.get("status") not in {"planned", "scheduled"}:
             raise ValueError("Only Planbox batches can be submitted from Planbox.")
@@ -750,7 +771,7 @@ class StudioStore:
         ensure_dir(run_dir / "outputs")
 
         tasks = []
-        for task in batch["tasks"]:
+        for task in self._selected_tasks(batch["tasks"], selected_task_ids):
             task_copy = json.loads(json.dumps(task, ensure_ascii=False))
             task_copy.update(
                 {
@@ -787,6 +808,7 @@ class StudioStore:
             },
             "run_settings": dict(batch["runtime_settings"]),
             "tasks": tasks,
+            "selected_task_ids": selected_task_ids or [],
             "logs": [],
         }
         save_json(self._run_manifest_path(project_id, run_id), manifest)
@@ -800,6 +822,18 @@ class StudioStore:
     def retry_run(self, project_id: str, run_id: str) -> dict[str, Any]:
         run = self.load_run(project_id, run_id)
         return self.create_run_from_batch(project_id, run["batch_id"], reason="retry")
+
+    def retry_run_task(self, project_id: str, run_id: str, task_id: str) -> dict[str, Any]:
+        run = self.load_run(project_id, run_id)
+        task_ids = {str(task.get("task_id", "")) for task in run.get("tasks", [])}
+        if task_id not in task_ids:
+            raise FileNotFoundError(f"Task not found in run: {task_id}")
+        return self.create_run_from_batch(
+            project_id,
+            run["batch_id"],
+            reason="task_retry",
+            selected_task_ids=[task_id],
+        )
 
     def enqueue_run(self, project_id: str, run_id: str) -> dict[str, Any]:
         queue_state = self.load_queue_state()

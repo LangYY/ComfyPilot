@@ -274,6 +274,20 @@ def project_detail_payload(project_id: str) -> dict[str, Any]:
     }
 
 
+def selected_task_ids_from_payload(payload: dict[str, Any] | None) -> list[str] | None:
+    if not payload:
+        return None
+    raw_ids = payload.get("selected_task_ids")
+    if raw_ids is None:
+        return None
+    if not isinstance(raw_ids, list):
+        raise HTTPException(status_code=400, detail="selected_task_ids must be a list.")
+    task_ids = [str(item).strip() for item in raw_ids if str(item).strip()]
+    if not task_ids:
+        raise HTTPException(status_code=400, detail="Please select at least one task.")
+    return task_ids
+
+
 async def read_text_upload(file: UploadFile | None, label: str) -> str:
     if not file:
         raise HTTPException(status_code=400, detail=f"{label} file is required.")
@@ -611,9 +625,14 @@ async def create_first_last_draft(
 
 
 @app.post("/api/projects/{project_id}/drafts/{draft_id}/submit")
-def submit_draft(project_id: str, draft_id: str) -> dict[str, Any]:
+def submit_draft(project_id: str, draft_id: str, payload: dict[str, Any] | None = None) -> dict[str, Any]:
     try:
-        batch = store.freeze_draft_to_batch(project_id, draft_id, status="queued")
+        batch = store.freeze_draft_to_batch(
+            project_id,
+            draft_id,
+            status="queued",
+            selected_task_ids=selected_task_ids_from_payload(payload),
+        )
         run = store.create_run_from_batch(project_id, batch["id"], reason="new")
         runner.enqueue_run(project_id, run["id"])
         return {
@@ -628,9 +647,14 @@ def submit_draft(project_id: str, draft_id: str) -> dict[str, Any]:
 
 
 @app.post("/api/projects/{project_id}/drafts/{draft_id}/plan")
-def plan_draft(project_id: str, draft_id: str) -> dict[str, Any]:
+def plan_draft(project_id: str, draft_id: str, payload: dict[str, Any] | None = None) -> dict[str, Any]:
     try:
-        batch = store.freeze_draft_to_batch(project_id, draft_id, status="planned")
+        batch = store.freeze_draft_to_batch(
+            project_id,
+            draft_id,
+            status="planned",
+            selected_task_ids=selected_task_ids_from_payload(payload),
+        )
         return {"ok": True, "batch": serialize_batch(project_id, batch)}
     except FileNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
@@ -701,6 +725,18 @@ def stop_all_runs() -> dict[str, Any]:
 def retry_run(project_id: str, run_id: str) -> dict[str, Any]:
     try:
         run = store.retry_run(project_id, run_id)
+        runner.enqueue_run(project_id, run["id"])
+        return {"ok": True, "run": serialize_run(project_id, run)}
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.post("/api/projects/{project_id}/runs/{run_id}/tasks/{task_id}/retry")
+def retry_run_task(project_id: str, run_id: str, task_id: str) -> dict[str, Any]:
+    try:
+        run = store.retry_run_task(project_id, run_id, task_id)
         runner.enqueue_run(project_id, run["id"])
         return {"ok": True, "run": serialize_run(project_id, run)}
     except FileNotFoundError as exc:

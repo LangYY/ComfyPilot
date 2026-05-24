@@ -9,6 +9,8 @@ const state = {
   promptsFileInfo: { count: null, error: "", loading: false },
   accessInfo: null,
   runtimeProfileStatus: null,
+  lastRenderedDraftId: "",
+  lastRenderedDraftUpdatedAt: "",
 };
 
 const RUN_STATUS_LABELS = {
@@ -685,11 +687,14 @@ function renderDraftPreview(draft) {
   const planButton = document.querySelector("#plan-draft-btn");
   const status = document.querySelector("#draft-status");
   if (!draft) {
-    body.innerHTML = '<tr><td colspan="5">还没有批次预览。</td></tr>';
+    body.innerHTML = '<tr><td colspan="6">还没有批次预览。</td></tr>';
     submitButton.disabled = true;
     planButton.disabled = true;
     status.textContent = "还没有批次预览";
     status.className = "status-pill idle";
+    state.lastRenderedDraftId = "";
+    state.lastRenderedDraftUpdatedAt = "";
+    updateDraftSelectionStatus();
     return;
   }
   submitButton.disabled = false;
@@ -699,6 +704,7 @@ function renderDraftPreview(draft) {
   body.innerHTML = draft.tasks.map((task) => {
     return `
       <tr>
+        <td><input class="draft-task-checkbox" type="checkbox" value="${escapeHtml(task.task_id)}" checked></td>
         <td>${escapeHtml(task.order)}</td>
         <td>${escapeHtml(task.seed_value)}</td>
         <td>${escapeHtml(task.expected_output_name)}</td>
@@ -707,6 +713,55 @@ function renderDraftPreview(draft) {
       </tr>
     `;
   }).join("");
+  const selectAll = document.querySelector("#draft-select-all");
+  if (selectAll) {
+    selectAll.checked = true;
+    selectAll.indeterminate = false;
+  }
+  state.lastRenderedDraftId = draft.id;
+  state.lastRenderedDraftUpdatedAt = draft.updated_at || "";
+  updateDraftSelectionStatus();
+}
+
+function draftTaskCheckboxes() {
+  return Array.from(document.querySelectorAll(".draft-task-checkbox"));
+}
+
+function selectedDraftTaskIds() {
+  return draftTaskCheckboxes()
+    .filter((checkbox) => checkbox.checked)
+    .map((checkbox) => checkbox.value)
+    .filter(Boolean);
+}
+
+function updateDraftSelectionStatus() {
+  const status = document.querySelector("#draft-selection-status");
+  const selectAll = document.querySelector("#draft-select-all");
+  const scope = document.querySelector("#draft-submit-scope")?.value || "all";
+  const boxes = draftTaskCheckboxes();
+  const selected = selectedDraftTaskIds().length;
+  if (selectAll) {
+    selectAll.indeterminate = selected > 0 && selected < boxes.length;
+    selectAll.checked = boxes.length > 0 && selected === boxes.length;
+  }
+  if (!status) {
+    return;
+  }
+  status.textContent = scope === "selected"
+    ? `将提交已勾选 ${selected}/${boxes.length} 条`
+    : `将提交全部 ${boxes.length} 条`;
+}
+
+function draftSubmitPayload() {
+  const scope = document.querySelector("#draft-submit-scope")?.value || "all";
+  if (scope !== "selected") {
+    return {};
+  }
+  const ids = selectedDraftTaskIds();
+  if (!ids.length) {
+    throw new Error("请至少勾选一条任务。");
+  }
+  return { selected_task_ids: ids };
 }
 
 function taskStatusPill(status) {
@@ -716,6 +771,55 @@ function taskStatusPill(status) {
 
 function isImageUrl(url) {
   return /\.(png|jpe?g|webp|bmp|gif)(\?|#|$)/i.test(String(url || ""));
+}
+
+function isVideoUrl(url) {
+  return /\.(mp4|webm|mov|m4v|avi)(\?|#|$)/i.test(String(url || ""));
+}
+
+function previewableMediaKind(url) {
+  if (isImageUrl(url)) {
+    return "image";
+  }
+  if (isVideoUrl(url)) {
+    return "video";
+  }
+  return "";
+}
+
+function openMediaPreview(url, title = "预览") {
+  const modal = document.querySelector("#media-preview-modal");
+  const body = document.querySelector("#media-preview-body");
+  const heading = document.querySelector("#media-preview-title");
+  const kind = previewableMediaKind(url);
+  if (!modal || !body || !kind) {
+    window.open(url, "_blank", "noreferrer");
+    return;
+  }
+  heading.textContent = title || "预览";
+  body.innerHTML = kind === "video"
+    ? `<video src="${escapeHtml(url)}" controls autoplay playsinline></video>`
+    : `<img src="${escapeHtml(url)}" alt="${escapeHtml(title || "preview")}">`;
+  modal.classList.remove("hidden");
+}
+
+function closeMediaPreview() {
+  const modal = document.querySelector("#media-preview-modal");
+  const body = document.querySelector("#media-preview-body");
+  if (body) {
+    body.innerHTML = "";
+  }
+  modal?.classList.add("hidden");
+}
+
+function userIsPreviewingMedia() {
+  const modalOpen = !document.querySelector("#media-preview-modal")?.classList.contains("hidden");
+  if (modalOpen) {
+    return true;
+  }
+  return Array.from(document.querySelectorAll(".expanded-detail-row video")).some((video) => {
+    return !video.paused || (video.currentTime > 0 && !video.ended);
+  });
 }
 
 function renderInputRefs(inputUrls = []) {
@@ -730,8 +834,11 @@ function renderInputRefs(inputUrls = []) {
         const image = isImageUrl(ref.url)
           ? `<img src="${escapeHtml(url)}" alt="${escapeHtml(label)}" loading="lazy">`
           : '<span class="material-symbols-outlined">image</span>';
+        const previewAttrs = previewableMediaKind(ref.url)
+          ? `data-preview-url="${escapeHtml(url)}" data-preview-title="${escapeHtml(label)}"`
+          : "";
         return `
-          <a class="input-preview-card" href="${escapeHtml(url)}" target="_blank" rel="noreferrer" title="${escapeHtml(label)}">
+          <a class="input-preview-card" href="${escapeHtml(url)}" target="_blank" rel="noreferrer" title="${escapeHtml(label)}" ${previewAttrs}>
             ${image}
             <small>${escapeHtml(label)}</small>
           </a>
@@ -758,10 +865,11 @@ function renderVideoPreviews(run) {
           const title = task.expected_output_name || task.output_path || `task_${task.order}`;
           return `
             <article class="video-preview-card">
-              <a href="${escapeHtml(url)}" target="_blank" rel="noreferrer">
-                <video src="${escapeHtml(url)}" controls preload="metadata"></video>
+              <video src="${escapeHtml(url)}" controls preload="metadata"></video>
+              <div class="video-preview-meta">
                 <span>#${escapeHtml(task.order)} · ${escapeHtml(title)}</span>
-              </a>
+                <button type="button" class="secondary-button compact-button" data-preview-url="${escapeHtml(url)}" data-preview-title="${escapeHtml(title)}">页面内预览</button>
+              </div>
             </article>
           `;
         }).join("")}
@@ -947,10 +1055,13 @@ function renderRunDetailContent(run) {
   const summary = taskSummary(run);
   const rows = (run.tasks || []).map((task) => {
     const promptId = task.prompt_id || "-";
+    const outputUrl = task.output_url ? withAccessToken(task.output_url) : "";
+    const outputTitle = task.expected_output_name || task.output_path || "输出文件";
     const output = task.output_url
-      ? `<a href="${escapeHtml(withAccessToken(task.output_url))}" target="_blank" rel="noreferrer">${escapeHtml(task.expected_output_name || task.output_path || "输出文件")}</a>`
+      ? `<button type="button" class="link-button" data-preview-url="${escapeHtml(outputUrl)}" data-preview-title="${escapeHtml(outputTitle)}">${escapeHtml(outputTitle)}</button>`
       : escapeHtml(task.expected_output_name || "-");
     const finalPath = task.final_output_path ? `<small>${escapeHtml(task.final_output_path)}</small>` : "";
+    const retryButton = `<button type="button" class="secondary-button compact-button" data-run-action="retry-task" data-run-id="${escapeHtml(run.id)}" data-task-id="${escapeHtml(task.task_id || "")}">单条再跑</button>`;
     return `
       <tr>
         <td>${escapeHtml(task.order)}</td>
@@ -962,6 +1073,7 @@ function renderRunDetailContent(run) {
         <td>${escapeHtml(formatSeconds(task.duration_seconds))}</td>
         <td>${output}${finalPath}</td>
         <td>${escapeHtml(task.error || "")}</td>
+        <td>${retryButton}</td>
       </tr>
     `;
   }).join("");
@@ -995,9 +1107,10 @@ function renderRunDetailContent(run) {
               <th>生成用时</th>
               <th>输出</th>
               <th>错误</th>
+              <th>操作</th>
             </tr>
           </thead>
-          <tbody>${rows || '<tr><td colspan="9">没有任务明细。</td></tr>'}</tbody>
+          <tbody>${rows || '<tr><td colspan="10">没有任务明细。</td></tr>'}</tbody>
         </table>
       </div>
       <pre class="logs-box">${escapeHtml(logs || "暂无日志。")}</pre>
@@ -1080,8 +1193,12 @@ async function loadDashboard() {
   const batches = data.selected_project?.batches || [];
   setQueueBadge(data.queue_state, runs);
   renderProfiles(data.selected_project?.profiles || []);
-  renderRuns(runs, data.queue_state);
-  renderPlannedBatches(batches);
+  if (!userIsPreviewingMedia()) {
+    renderRuns(runs, data.queue_state);
+    renderPlannedBatches(batches);
+  } else {
+    updateQueueMetrics(runs, batches, data.queue_state);
+  }
   loadRuntimeProfileStatus().catch(console.error);
   if (!state.settingsHydrated) {
     hydrateSettings(data.selected_project);
@@ -1090,7 +1207,13 @@ async function loadDashboard() {
   renderModeFields();
   if (state.selectedDraft) {
     const freshDraft = (data.selected_project?.drafts || []).find((draft) => draft.id === state.selectedDraft.id);
-    renderDraftPreview(freshDraft || state.selectedDraft);
+    const nextDraft = freshDraft || state.selectedDraft;
+    if (
+      state.lastRenderedDraftId !== nextDraft.id
+      || state.lastRenderedDraftUpdatedAt !== (nextDraft.updated_at || "")
+    ) {
+      renderDraftPreview(nextDraft);
+    }
   } else {
     renderDraftPreview(null);
   }
@@ -1192,10 +1315,11 @@ async function handleDraftSubmit() {
   if (!project || !state.selectedDraft) {
     throw new Error("请先生成批次预览。");
   }
+  const payload = draftSubmitPayload();
   await api(`/api/projects/${project.id}/drafts/${state.selectedDraft.id}/submit`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: "{}",
+    body: JSON.stringify(payload),
   });
   state.selectedDraft = null;
   await loadDashboard();
@@ -1208,10 +1332,11 @@ async function handleDraftPlan() {
   if (!project || !state.selectedDraft) {
     throw new Error("请先生成批次预览。");
   }
+  const payload = draftSubmitPayload();
   await api(`/api/projects/${project.id}/drafts/${state.selectedDraft.id}/plan`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: "{}",
+    body: JSON.stringify(payload),
   });
   state.selectedDraft = null;
   await loadDashboard();
@@ -1227,6 +1352,7 @@ async function handleRunAction(event) {
   const project = currentProject();
   const runId = button.dataset.runId;
   const action = button.dataset.runAction;
+  const taskId = button.dataset.taskId;
   if (!project || !runId) {
     return;
   }
@@ -1239,6 +1365,16 @@ async function handleRunAction(event) {
     await loadDashboard();
   } else if (action === "retry") {
     await api(`/api/projects/${project.id}/runs/${runId}/retry`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: "{}",
+    });
+    await loadDashboard();
+  } else if (action === "retry-task") {
+    if (!taskId) {
+      throw new Error("找不到要重跑的任务 ID。");
+    }
+    await api(`/api/projects/${project.id}/runs/${runId}/tasks/${taskId}/retry`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: "{}",
@@ -1381,6 +1517,34 @@ function bindEvents() {
       toast("已提交到运行队列。");
     } catch (error) {
       toast(error.message);
+    }
+  });
+  document.querySelector("#draft-tasks-body").addEventListener("change", (event) => {
+    if (event.target.closest(".draft-task-checkbox")) {
+      updateDraftSelectionStatus();
+    }
+  });
+  document.querySelector("#draft-select-all").addEventListener("change", (event) => {
+    draftTaskCheckboxes().forEach((checkbox) => {
+      checkbox.checked = event.target.checked;
+    });
+    updateDraftSelectionStatus();
+  });
+  document.querySelector("#draft-submit-scope").addEventListener("change", updateDraftSelectionStatus);
+  document.addEventListener("click", (event) => {
+    const previewTarget = event.target.closest("[data-preview-url]");
+    if (previewTarget) {
+      event.preventDefault();
+      openMediaPreview(previewTarget.dataset.previewUrl, previewTarget.dataset.previewTitle || previewTarget.textContent.trim());
+      return;
+    }
+    if (event.target.closest("[data-preview-close]")) {
+      closeMediaPreview();
+    }
+  });
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") {
+      closeMediaPreview();
     }
   });
   document.querySelector("#stop-all-btn").addEventListener("click", async () => {
