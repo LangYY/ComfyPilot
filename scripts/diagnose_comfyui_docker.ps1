@@ -1,6 +1,6 @@
 param(
-  [string]$ComposeDir = "E:\AI_Projects\ComfyUI-Project\pytorch2.8.0-cu128-update",
-  [string]$ContainerName = "comfyui_cu128_update",
+  [string]$ComposeDir = "E:\AI_Projects\ComfyUI-Project\pytorch2.8.0-cu128",
+  [string]$ContainerName = "comfyui_cu128_v0812",
   [int]$LogTail = 500
 )
 

@@ -1,24 +1,8 @@
 services:
   comfyui:
     environment:
-      - PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True,max_split_size_mb:256,garbage_collection_threshold:0.82
-      - CUDA_MODULE_LOADING=LAZY
-      - NVIDIA_DRIVER_CAPABILITIES=compute,utility
-    command:
-      - python
-      - /app/main.py
-      - --listen
-      - 0.0.0.0
-      - --port
-      - "8188"
-      - --input-directory
-      - /app/input
-      - --output-directory
-      - /app/output
-      - --temp-directory
-      - /app/temp
-      - --normalvram
-      - --reserve-vram
-      - "1"
-    shm_size: "16g"
-    restart: unless-stopped
+      - PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
+      - HF_HOME=/app/cache/huggingface
+      - TRANSFORMERS_CACHE=/app/cache/huggingface
+      - HUGGINGFACE_HUB_CACHE=/app/cache/huggingface
+      - TZ=Asia/Shanghai

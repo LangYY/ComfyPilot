@@ -33,7 +33,7 @@ runner = QueueRunner(store)
 COMFYUI_DOCKER_DIR = Path(
     os.environ.get(
         "COMFYUI_DOCKER_DIR",
-        r"E:\AI_Projects\ComfyUI-Project\pytorch2.8.0-cu128-update",
+        r"E:\AI_Projects\ComfyUI-Project\pytorch2.8.0-cu128",
     )
 )
 COMFYUI_DOCKER_STATE_PATH = COMFYUI_DOCKER_DIR / "comfyui_runtime_profile.json"
