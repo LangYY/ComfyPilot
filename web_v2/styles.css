@@ -487,6 +487,14 @@ textarea:focus {
   grid-template-columns: 1.1fr 0.8fr 0.8fr 0.8fr 0.9fr;
 }
 
+.seed-control {
+  grid-template-columns: 1fr;
+}
+
+.seed-control #seed-fixed {
+  margin-top: 6px;
+}
+
 .runtime-profile-box {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
