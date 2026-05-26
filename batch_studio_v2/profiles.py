@@ -204,12 +204,19 @@ def _detect_negative_prompt_binding(
 def _runtime_field_candidates(
     workflow: dict[str, dict[str, Any]],
     aliases: tuple[str, ...],
+    title_aliases: tuple[str, ...] = (),
 ) -> list[dict[str, Any]]:
     detected: list[dict[str, Any]] = []
+    alias_set = {alias.lower() for alias in aliases}
+    title_alias_set = {alias.lower() for alias in title_aliases}
     for node_id, node in workflow.items():
         inputs = node.get("inputs", {})
+        title_blob = f"{legacy_batch.node_title(node)} {node_id} {node.get('class_type', '')}".lower()
         for input_name, value in inputs.items():
-            if input_name not in aliases:
+            input_key = str(input_name).lower()
+            input_matches = input_key in alias_set
+            title_matches = bool(title_alias_set) and input_key == "value" and any(alias in title_blob for alias in title_alias_set)
+            if not input_matches and not title_matches:
                 continue
             if not isinstance(value, (int, float)):
                 continue
@@ -223,6 +230,17 @@ def _runtime_field_candidates(
                 }
             )
     return detected
+
+
+def _duration_options(default_value: Any) -> list[int]:
+    values = {3, 5, 8, 10, 15, 20, 30}
+    try:
+        current = int(default_value)
+        if current > 0:
+            values.add(current)
+    except (TypeError, ValueError):
+        pass
+    return sorted(values)
 
 
 def inspect_workflow_profile(
@@ -264,6 +282,11 @@ def inspect_workflow_profile(
     )
     width_bindings = _runtime_field_candidates(compiled_template, ("width", "resize_type.width"))
     height_bindings = _runtime_field_candidates(compiled_template, ("height", "resize_type.height"))
+    duration_bindings = _runtime_field_candidates(
+        compiled_template,
+        ("duration", "duration_seconds", "seconds", "length", "video_length", "num_seconds"),
+        ("duration", "time", "seconds", "时长", "秒"),
+    )
 
     runtime_schema = [
         {
@@ -321,6 +344,17 @@ def inspect_workflow_profile(
                 "default": int(config_hint.get("height_pixels", height_bindings[0]["current_value"])),
             }
         )
+    if duration_bindings:
+        duration_default = int(config_hint.get("duration_seconds", duration_bindings[0]["current_value"]))
+        runtime_schema.append(
+            {
+                "key": "duration_seconds",
+                "label": "Generation Duration (s)",
+                "type": "integer",
+                "default": duration_default,
+                "options": _duration_options(duration_default),
+            }
+        )
     if seed_nodes:
         runtime_schema.append(
             {
@@ -362,6 +396,7 @@ def inspect_workflow_profile(
             "runtime_fields": {
                 "width_pixels": deep_copy_jsonable(width_bindings),
                 "height_pixels": deep_copy_jsonable(height_bindings),
+                "duration_seconds": deep_copy_jsonable(duration_bindings),
             },
         },
         "runtime_schema": runtime_schema,
@@ -370,6 +405,7 @@ def inspect_workflow_profile(
             "output_name_prefix": str(config_hint.get("output_name_prefix", "")),
             "width_pixels": int(config_hint.get("width_pixels", width_bindings[0]["current_value"])) if width_bindings else None,
             "height_pixels": int(config_hint.get("height_pixels", height_bindings[0]["current_value"])) if height_bindings else None,
+            "duration_seconds": int(config_hint.get("duration_seconds", duration_bindings[0]["current_value"])) if duration_bindings else None,
             "upload_subfolder": str(config_hint.get("upload_subfolder", "")),
             "poll_interval_seconds": float(config_hint.get("poll_interval_seconds", 5)),
             "timeout_seconds": int(config_hint.get("timeout_seconds", 3600)),
@@ -381,6 +417,7 @@ def inspect_workflow_profile(
             "base_url_used": base_url,
             "compiled_from_ui_workflow": isinstance(workflow_data, dict) and isinstance(workflow_data.get("nodes"), list),
             "compiled_node_count": len(compiled_template),
+            "duration_options_seconds": _duration_options(duration_bindings[0]["current_value"]) if duration_bindings else [],
         },
     }
     return profile_manifest, deep_copy_jsonable(compiled_template)

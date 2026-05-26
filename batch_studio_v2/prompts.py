@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from pathlib import Path
 from typing import Any
+import json
+import re
 
 from ltx_batch.batch import build_output_name, load_prompts
 
@@ -32,6 +34,66 @@ def input_ref(kind: str, relative_path: str, label: str) -> dict[str, Any]:
         "path": relative_path.replace("\\", "/"),
         "label": label,
     }
+
+
+def _normalize_prompt_value(value: Any) -> Any:
+    if isinstance(value, str):
+        text = value.strip()
+        if not text:
+            raise ValueError("Prompt text is empty.")
+        return [text]
+    return value
+
+
+def _strip_loose_line_prefix(line: str) -> str:
+    cleaned = re.sub(r"^\s*(?:[-*•]+|\d+[\.\)、)]|[（(]\d+[）)])\s*", "", line.strip())
+    return cleaned.strip().strip('"').strip("'").strip()
+
+
+def _loose_lines_to_prompts(text: str) -> list[str]:
+    lines = [_strip_loose_line_prefix(line) for line in text.splitlines()]
+    prompts = [line for line in lines if line]
+    if prompts:
+        return prompts
+    cleaned = _strip_loose_line_prefix(text)
+    if cleaned:
+        return [cleaned]
+    raise ValueError("Prompt text is empty.")
+
+
+def normalize_prompt_payload_text(text: str) -> Any:
+    raw = str(text or "").strip().lstrip("\ufeff")
+    if not raw:
+        raise ValueError("prompts text is required.")
+
+    normalized = raw.translate(str.maketrans({"“": '"', "”": '"', "‘": "'", "’": "'"}))
+    candidates = [raw]
+    if normalized != raw:
+        candidates.append(normalized)
+
+    for candidate in candidates:
+        try:
+            return _normalize_prompt_value(json.loads(candidate))
+        except json.JSONDecodeError:
+            pass
+
+    trailing_comma_fixed = re.sub(r",\s*([}\]])", r"\1", normalized)
+    if trailing_comma_fixed != normalized:
+        try:
+            return _normalize_prompt_value(json.loads(trailing_comma_fixed))
+        except json.JSONDecodeError:
+            pass
+
+    if not normalized.startswith(("[", "{")):
+        try:
+            return _normalize_prompt_value(json.loads(f"[{normalized}]"))
+        except json.JSONDecodeError:
+            return _loose_lines_to_prompts(normalized)
+
+    raise ValueError(
+        "prompts text looks like JSON but could not be parsed. "
+        "Use a JSON array/object, a single JSON string, or plain text prompts separated by new lines."
+    )
 
 
 def task_from_prompt_entry(

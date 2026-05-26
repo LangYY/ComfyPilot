@@ -24,7 +24,7 @@ from .common import (
     to_relative_string,
 )
 from .profiles import inspect_workflow_profile, raw_workflow_from_text
-from .prompts import input_ref, merge_run_settings, parse_prompt_payload
+from .prompts import input_ref, merge_run_settings, normalize_prompt_payload_text, parse_prompt_payload
 
 
 class StudioStore:
@@ -168,6 +168,7 @@ class StudioStore:
                 "output_name_prefix": "",
                 "width_pixels": None,
                 "height_pixels": None,
+                "duration_seconds": None,
                 "upload_subfolder": "",
                 "upload_files": True,
                 "poll_interval_seconds": 5,
@@ -367,7 +368,7 @@ class StudioStore:
         save_json(self._run_manifest_path(manifest["project_id"], manifest["id"]), manifest)
 
     def _normalize_prompts_payload(self, prompts_text: str) -> Any:
-        return json.loads(prompts_text)
+        return normalize_prompt_payload_text(prompts_text)
 
     def _natural_file_key(self, name: str) -> list[Any]:
         parts = re.split(r"(\d+)", Path(name).stem)

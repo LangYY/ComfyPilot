@@ -457,6 +457,7 @@ def update_settings(payload: dict[str, Any]) -> dict[str, Any]:
                 "output_name_prefix": str(payload.get("output_name_prefix", "")),
                 "width_pixels": payload.get("width_pixels"),
                 "height_pixels": payload.get("height_pixels"),
+                "duration_seconds": payload.get("duration_seconds"),
                 "seed_mode": str(payload.get("seed_mode", "fixed")),
                 "seed_fixed": int(payload.get("seed_fixed") or 1),
                 "seed_base": int(payload.get("seed_fixed") or 1),

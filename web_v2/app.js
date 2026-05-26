@@ -189,6 +189,9 @@ function selectedProfile() {
 }
 
 function countPromptPayload(payload) {
+  if (typeof payload === "string") {
+    return payload.trim() ? 1 : 0;
+  }
   if (Array.isArray(payload)) {
     return payload.length;
   }
@@ -201,8 +204,61 @@ function countPromptPayload(payload) {
   return null;
 }
 
+function stripLoosePromptPrefix(line) {
+  return String(line || "")
+    .trim()
+    .replace(/^\s*(?:[-*•]+|\d+[\.\)、)]|[（(]\d+[）)])\s*/, "")
+    .trim()
+    .replace(/^["']+|["']+$/g, "")
+    .trim();
+}
+
+function loosePromptLines(text) {
+  const lines = String(text || "")
+    .split(/\r?\n/)
+    .map(stripLoosePromptPrefix)
+    .filter(Boolean);
+  if (lines.length) {
+    return lines;
+  }
+  const cleaned = stripLoosePromptPrefix(text);
+  return cleaned ? [cleaned] : [];
+}
+
+function parsePromptPayloadText(text) {
+  const raw = String(text || "").trim().replace(/^\uFEFF/, "");
+  if (!raw) {
+    throw new Error("prompts text is required.");
+  }
+  const normalized = raw.replace(/[“”]/g, '"').replace(/[‘’]/g, "'");
+  const candidates = raw === normalized ? [raw] : [raw, normalized];
+  for (const candidate of candidates) {
+    try {
+      return JSON.parse(candidate);
+    } catch (error) {
+      // Try the next lenient form.
+    }
+  }
+  const trailingCommaFixed = normalized.replace(/,\s*([}\]])/g, "$1");
+  if (trailingCommaFixed !== normalized) {
+    try {
+      return JSON.parse(trailingCommaFixed);
+    } catch (error) {
+      // Fall through to loose text parsing.
+    }
+  }
+  if (!normalized.startsWith("[") && !normalized.startsWith("{")) {
+    try {
+      return JSON.parse(`[${normalized}]`);
+    } catch (error) {
+      return loosePromptLines(normalized);
+    }
+  }
+  throw new Error("looks like JSON but could not be parsed");
+}
+
 function countPromptsFromText(text) {
-  return countPromptPayload(JSON.parse(text));
+  return countPromptPayload(parsePromptPayloadText(text));
 }
 
 function promptInputDetails() {
@@ -269,6 +325,7 @@ function runtimeOverrides() {
     negative_prompt_text: document.querySelector("#negative-prompt-text").value.trim(),
     width_pixels: parseOptionalInteger("#width-pixels"),
     height_pixels: parseOptionalInteger("#height-pixels"),
+    duration_seconds: parseOptionalInteger("#duration-seconds"),
   };
 }
 
@@ -321,6 +378,8 @@ function hydrateSettings(projectDetail) {
   document.querySelector("#seed-fixed").value = defaults.seed_fixed || defaults.seed_base || 1;
   document.querySelector("#width-pixels").value = defaults.width_pixels || "1280";
   document.querySelector("#height-pixels").value = defaults.height_pixels || "720";
+  document.querySelector("#duration-seconds").dataset.savedValue = defaults.duration_seconds || "";
+  document.querySelector("#duration-seconds").value = defaults.duration_seconds || "";
   syncSizePreset();
   updateSeedFieldVisibility();
 }
@@ -454,6 +513,48 @@ function syncSizePreset() {
   select.value = hasPreset ? preset : "custom";
 }
 
+function durationOptionsForProfile(profile) {
+  const schemaItem = (profile?.runtime_schema || []).find((item) => item.key === "duration_seconds");
+  const options = new Set([3, 5, 8, 10, 15]);
+  for (const value of schemaItem?.options || []) {
+    const number = Number.parseInt(value, 10);
+    if (Number.isFinite(number) && number > 0) {
+      options.add(number);
+    }
+  }
+  const defaultValue = Number.parseInt(schemaItem?.default || profile?.defaults?.duration_seconds || "", 10);
+  if (Number.isFinite(defaultValue) && defaultValue > 0) {
+    options.add(defaultValue);
+  }
+  return {
+    detected: Boolean(schemaItem),
+    values: Array.from(options).sort((a, b) => a - b),
+    defaultValue: Number.isFinite(defaultValue) && defaultValue > 0 ? defaultValue : null,
+  };
+}
+
+function renderDurationOptions(profile) {
+  const select = document.querySelector("#duration-seconds");
+  const help = document.querySelector("#duration-help");
+  if (!select) {
+    return;
+  }
+  const previous = select.value || select.dataset.savedValue || "";
+  const duration = durationOptionsForProfile(profile);
+  select.innerHTML = '<option value="">Workflow 默认</option>'
+    + duration.values.map((seconds) => `<option value="${seconds}">${seconds}s</option>`).join("");
+  if (previous && Array.from(select.options).some((option) => option.value === String(previous))) {
+    select.value = previous;
+  } else if (duration.defaultValue) {
+    select.value = String(duration.defaultValue);
+  }
+  if (help) {
+    help.textContent = duration.detected
+      ? `已识别时长控制。可选预设：${duration.values.map((item) => `${item}s`).join(", ")}。`
+      : "此 profile 未保存明确的时长节点。这里显示常用预设；运行时仍会尝试写入 workflow 里的 Duration 节点。";
+  }
+}
+
 function renderProfiles(profiles) {
   const select = document.querySelector("#draft-profile-id");
   const search = (document.querySelector("#workflow-search")?.value || "").trim().toLowerCase();
@@ -476,8 +577,10 @@ function renderProfiles(profiles) {
   }
 
   const profile = selectedProfile() || options[0];
+  renderDurationOptions(profile);
   const mediaInputs = profile?.bindings?.media_inputs || [];
   const saveVideo = profile?.bindings?.save_video || {};
+  const duration = durationOptionsForProfile(profile);
   const runtimeFields = (profile?.runtime_schema || []).map((item) => item.label || item.key).join(", ") || "无";
   document.querySelector("#profiles-box").textContent = [
     `当前：${profile?.name || "-"}`,
@@ -485,6 +588,7 @@ function renderProfiles(profiles) {
     `素材输入节点：${mediaInputs.length}`,
     `SaveVideo：${saveVideo.id || "未识别"} / ${saveVideo.input_name || "-"}`,
     `可批量控制参数：${runtimeFields}`,
+    `支持时长：${duration.values.map((item) => `${item}s`).join(", ")}`,
   ].join("\n");
 }
 
@@ -1579,7 +1683,10 @@ function bindEvents() {
   });
 
   document.querySelector("#workflow-file").addEventListener("change", updateWorkflowFileStatus);
-  document.querySelector("#draft-profile-id").addEventListener("change", renderUploadChecklist);
+  document.querySelector("#draft-profile-id").addEventListener("change", () => {
+    renderDurationOptions(selectedProfile());
+    renderUploadChecklist();
+  });
   document.querySelector("#prompts-text").addEventListener("input", renderUploadChecklist);
   document.querySelector("#prompts-file").addEventListener("change", updatePromptFileInfo);
   document.querySelector("#seed-mode").addEventListener("change", updateSeedFieldVisibility);

@@ -482,6 +482,15 @@ class QueueRunner:
                 height_node = legacy_batch.ensure_node(workflow, binding, "output height")
                 height_node.setdefault("inputs", {})[binding["input_name"]] = int(height_value)
 
+        duration_value = run_settings.get("duration_seconds")
+        if duration_value not in (None, ""):
+            duration_bindings = runtime_field_bindings.get("duration_seconds", [])
+            if not duration_bindings:
+                duration_bindings = self._detect_duration_bindings(workflow)
+            for binding in duration_bindings:
+                duration_node = legacy_batch.ensure_node(workflow, binding, "generation duration")
+                duration_node.setdefault("inputs", {})[binding["input_name"]] = int(duration_value)
+
         save_video = bindings["save_video"]
         save_node = legacy_batch.ensure_node(workflow, save_video, "save video")
         output_name = str(task["expected_output_name"])
@@ -493,6 +502,32 @@ class QueueRunner:
         for seed_binding in bindings.get("seed_nodes", []):
             seed_node = legacy_batch.ensure_node(workflow, seed_binding, "seed")
             seed_node.setdefault("inputs", {})[seed_binding["input_name"]] = int(task["seed_value"])
+
+    def _detect_duration_bindings(self, workflow: dict[str, dict[str, Any]]) -> list[dict[str, Any]]:
+        aliases = {"duration", "duration_seconds", "seconds", "length", "video_length", "num_seconds"}
+        title_aliases = ("duration", "seconds", "时长", "秒")
+        bindings: list[dict[str, Any]] = []
+        for node_id, node in workflow.items():
+            inputs = node.get("inputs", {})
+            title_blob = f"{legacy_batch.node_title(node)} {node_id} {node.get('class_type', '')}".lower()
+            for input_name, value in inputs.items():
+                input_key = str(input_name).lower()
+                input_matches = input_key in aliases
+                title_matches = input_key == "value" and any(alias in title_blob for alias in title_aliases)
+                if not input_matches and not title_matches:
+                    continue
+                if not isinstance(value, (int, float)):
+                    continue
+                bindings.append(
+                    {
+                        "id": str(node_id),
+                        "input_name": str(input_name),
+                        "current_value": value,
+                        "class_type": str(node.get("class_type", "")),
+                        "title": legacy_batch.node_title(node),
+                    }
+                )
+        return bindings
 
     def _cancel_remaining_tasks(self, run: dict[str, Any], *, message: str) -> None:
         for task in run["tasks"]:

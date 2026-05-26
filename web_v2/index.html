@@ -147,6 +147,14 @@
                   </label>
                 </div>
 
+                <label>
+                  <span>生成时长</span>
+                  <select id="duration-seconds">
+                    <option value="">Workflow 默认</option>
+                  </select>
+                  <small id="duration-help">上传 workflow 后，工作台会尝试识别可控制的 Duration 节点。</small>
+                </label>
+
                 <div class="mini-grid two">
                   <label>
                     <span>Seed 模式</span>
@@ -188,11 +196,11 @@
 
                 <label>
                   <span>Positive Prompts JSON</span>
-                  <textarea id="prompts-text" class="code-box prompt-box" spellcheck="false" placeholder='["第一条完整 prompt", "第二条完整 prompt"]'></textarea>
+                  <textarea id="prompts-text" class="code-box prompt-box" spellcheck="false" placeholder='支持 JSON 数组/对象，也支持单条 prompt 或每行一条：&#10;镜头1 prompt&#10;镜头2 prompt'></textarea>
                 </label>
                 <div class="inline-actions">
-                  <input id="prompts-file" type="file" accept=".json,application/json">
-                  <span id="prompts-input-status" class="hint">必需：粘贴 prompt JSON，或上传 prompts.json。</span>
+                  <input id="prompts-file" type="file" accept=".json,.txt,text/plain,application/json">
+                  <span id="prompts-input-status" class="hint">必需：粘贴 JSON、单条 prompt，或每行一条 prompt。</span>
                 </div>
 
                 <div id="storyboard-fields" class="mode-fields stack hidden">
