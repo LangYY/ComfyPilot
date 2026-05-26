@@ -800,16 +800,21 @@ function renderUploadChecklist() {
   }
 
   document.querySelector("#upload-checklist").innerHTML = `
-    <h3>本批次需要上传什么？</h3>
-    ${items.map((item) => `
-      <div class="upload-item">
+    <div class="upload-check-title">
+      <strong>本批次需要</strong>
+      <span>${escapeHtml(info.label)}</span>
+    </div>
+    <div class="upload-status-row">
+      ${items.map((item) => `
+      <div class="upload-item ${item.kind}" title="${escapeHtml(item.text)}">
         <span class="upload-tag ${item.kind}">${escapeHtml(item.tag)}</span>
         <div>
           <strong>${escapeHtml(item.title)}</strong>
           <p>${escapeHtml(item.text)}</p>
         </div>
       </div>
-    `).join("")}
+      `).join("")}
+    </div>
   `;
   document.querySelector("#prompts-input-status").textContent = promptsReady
     ? promptDetails.text
