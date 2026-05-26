@@ -8,7 +8,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&family=Plus+Jakarta+Sans:wght@600;700;800&display=swap" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@200..700,0..1&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/assets-v2/styles.css?v=20260526-runtime-order">
+    <link rel="stylesheet" href="/assets-v2/styles.css?v=20260526-runtime-two-rows">
   </head>
   <body data-active-tab="submit">
     <header class="topbar">
@@ -95,63 +95,67 @@
 
               <form id="settings-form" class="stack tight-stack">
                 <div class="runtime-grid">
-                  <label>
-                    <span>ComfyUI Docker 模式</span>
-                    <select id="comfyui-runtime-profile">
-                      <option value="stable">稳定优先</option>
-                      <option value="balanced">均衡模式</option>
-                      <option value="performance">性能优先</option>
-                      <option value="ultra-stable">极稳模式</option>
-                    </select>
-                  </label>
-                  <label>
-                    <span>ComfyUI 运行地址</span>
-                    <input id="comfyui-base-url" type="text" value="http://127.0.0.1:8189">
-                  </label>
-                  <label>
-                    <span>ComfyUI 保存子目录</span>
-                    <input id="comfyui-output-dir" type="text" placeholder="例如：video/batch_studio_v2">
-                  </label>
-                  <label>
-                    <span>文件名前缀</span>
-                    <input id="output-name-prefix" type="text" placeholder="例如：0523_zodiac_">
-                  </label>
-                  <label>
-                    <span>尺寸预设</span>
-                    <select id="size-preset">
-                      <option value="1280x720">1280 x 720 (16:9)</option>
-                      <option value="720x1280">720 x 1280 (9:16)</option>
-                      <option value="1920x1080">1920 x 1080 (16:9)</option>
-                      <option value="1080x1920">1080 x 1920 (9:16)</option>
-                      <option value="1024x1024">1024 x 1024 (1:1)</option>
-                      <option value="custom">自定义</option>
-                    </select>
-                  </label>
-                  <label>
-                    <span>输出宽度</span>
-                    <input id="width-pixels" type="number" min="1" placeholder="1280">
-                  </label>
-                  <label>
-                    <span>输出高度</span>
-                    <input id="height-pixels" type="number" min="1" placeholder="720">
-                  </label>
-                  <label>
-                    <span>生成时长</span>
-                    <select id="duration-seconds">
-                      <option value="5">5s</option>
-                    </select>
-                  </label>
-                  <label>
-                    <span>Seed 模式</span>
-                    <select id="seed-mode">
-                      <option value="random">随机 seed</option>
-                      <option value="fixed">固定 seed</option>
-                    </select>
-                  </label>
-                  <label id="seed-fixed-field" class="hidden">
-                    <span>固定 Seed</span>
-                    <input id="seed-fixed" type="number" value="1">
-                  </label>
+                  <div class="runtime-row runtime-row-primary">
+                    <label>
+                      <span>ComfyUI Docker模式</span>
+                      <select id="comfyui-runtime-profile">
+                        <option value="stable">稳定优先</option>
+                        <option value="balanced">均衡模式</option>
+                        <option value="performance">性能优先</option>
+                        <option value="ultra-stable">极稳模式</option>
+                      </select>
+                    </label>
+                    <label>
+                      <span>ComfyUI 运行地址</span>
+                      <input id="comfyui-base-url" type="text" value="http://127.0.0.1:8189">
+                    </label>
+                    <label>
+                      <span>ComfyUI保存子目录</span>
+                      <input id="comfyui-output-dir" type="text" placeholder="例如：video/batch_studio_v2">
+                    </label>
+                    <label>
+                      <span>文件名前缀</span>
+                      <input id="output-name-prefix" type="text" placeholder="例如：0523_zodiac_">
+                    </label>
+                  </div>
+                  <div class="runtime-row runtime-row-secondary">
+                    <label>
+                      <span>尺寸预设</span>
+                      <select id="size-preset">
+                        <option value="1280x720">1280 x 720 (16:9)</option>
+                        <option value="720x1280">720 x 1280 (9:16)</option>
+                        <option value="1920x1080">1920 x 1080 (16:9)</option>
+                        <option value="1080x1920">1080 x 1920 (9:16)</option>
+                        <option value="1024x1024">1024 x 1024 (1:1)</option>
+                        <option value="custom">自定义</option>
+                      </select>
+                    </label>
+                    <label>
+                      <span>宽度</span>
+                      <input id="width-pixels" type="number" min="1" placeholder="1280">
+                    </label>
+                    <label>
+                      <span>高度</span>
+                      <input id="height-pixels" type="number" min="1" placeholder="720">
+                    </label>
+                    <label>
+                      <span>生成时长</span>
+                      <select id="duration-seconds">
+                        <option value="5">5s</option>
+                      </select>
+                    </label>
+                    <label>
+                      <span>seed模式</span>
+                      <select id="seed-mode">
+                        <option value="random">随机 seed</option>
+                        <option value="fixed">固定 seed</option>
+                      </select>
+                    </label>
+                    <label id="seed-fixed-field" class="hidden">
+                      <span>固定 Seed</span>
+                      <input id="seed-fixed" type="number" value="1">
+                    </label>
+                  </div>
                 </div>
 
                 <div class="runtime-profile-box">
@@ -440,6 +444,6 @@
       </section>
     </div>
 
-    <script src="/assets-v2/app.js?v=20260526-runtime-order"></script>
+    <script src="/assets-v2/app.js?v=20260526-runtime-two-rows"></script>
   </body>
 </html>
