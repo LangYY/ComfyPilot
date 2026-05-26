@@ -277,8 +277,6 @@ body[data-active-tab="queue"] .app-shell {
   align-items: start;
 }
 
-.submit-left,
-.submit-main,
 .stack,
 .queue-primary,
 .queue-inspector {
