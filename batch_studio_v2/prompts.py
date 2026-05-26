@@ -114,7 +114,8 @@ def task_from_prompt_entry(
         if key not in {"prompt", "text"}
     }
     seed_value = compute_seed(entry, order, seed_base)
-    expected_output_name = build_output_name(entry)
+    base_output_name = build_output_name(entry)
+    expected_output_name = base_output_name
     if output_name_prefix.strip():
         name_path = Path(expected_output_name)
         expected_output_name = f"{output_name_prefix.strip()}{name_path.stem}{name_path.suffix}"
@@ -126,6 +127,7 @@ def task_from_prompt_entry(
         "sidecar": sidecar,
         "input_refs": list(input_refs or []),
         "runtime_overrides": {},
+        "base_output_name": base_output_name,
         "expected_output_name": expected_output_name,
         "seed_value": seed_value,
     }

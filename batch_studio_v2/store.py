@@ -7,6 +7,7 @@ import shutil
 from pathlib import Path
 from typing import Any
 
+from ltx_batch.batch import build_output_name
 from ltx_batch.storyboard import split_storyboard
 
 from .common import (
@@ -24,7 +25,7 @@ from .common import (
     to_relative_string,
 )
 from .profiles import inspect_workflow_profile, raw_workflow_from_text
-from .prompts import input_ref, merge_run_settings, normalize_prompt_payload_text, parse_prompt_payload
+from .prompts import compute_seed, input_ref, merge_run_settings, normalize_prompt_payload_text, parse_prompt_payload
 
 
 class StudioStore:
@@ -388,6 +389,55 @@ class StudioStore:
             for task in tasks:
                 task["seed_value"] = fixed_seed
 
+    def _merge_submission_runtime_settings(
+        self,
+        base: dict[str, Any],
+        overrides: dict[str, Any] | None,
+    ) -> dict[str, Any]:
+        clearable_string_keys = {"save_prefix_root", "output_name_prefix", "negative_prompt_text"}
+        merged = dict(base or {})
+        for key, value in (overrides or {}).items():
+            if value is None:
+                continue
+            if value == "" and key not in clearable_string_keys:
+                continue
+            merged[key] = value
+        return merged
+
+    def _task_prompt_entry(self, task: dict[str, Any]) -> dict[str, Any]:
+        entry = dict(task.get("sidecar") or {})
+        entry.setdefault("index", task.get("source_index") or task.get("order") or 1)
+        entry["prompt"] = task.get("prompt_text", "")
+        return entry
+
+    def _refresh_task_runtime_fields(
+        self,
+        tasks: list[dict[str, Any]],
+        runtime_settings: dict[str, Any],
+        *,
+        update_seeds: bool = False,
+        update_output_names: bool = True,
+    ) -> None:
+        if update_output_names:
+            output_name_prefix = str(runtime_settings.get("output_name_prefix", "")).strip()
+            for task in tasks:
+                entry = self._task_prompt_entry(task)
+                base_output_name = str(task.get("base_output_name") or build_output_name(entry))
+                task["base_output_name"] = base_output_name
+                expected_output_name = base_output_name
+                if output_name_prefix:
+                    name_path = Path(base_output_name)
+                    expected_output_name = f"{output_name_prefix}{name_path.stem}{name_path.suffix}"
+                task["expected_output_name"] = expected_output_name
+
+        if update_seeds:
+            seed_base = int(runtime_settings.get("seed_base") or 1)
+            for task in tasks:
+                entry = self._task_prompt_entry(task)
+                order = int(task.get("order") or 1)
+                task["seed_value"] = compute_seed(entry, order, seed_base)
+            self._apply_seed_policy(tasks, runtime_settings)
+
     def _write_uploaded_images(
         self,
         target_dir: Path,
@@ -709,6 +759,7 @@ class StudioStore:
         *,
         status: str = "queued",
         selected_task_ids: list[str] | None = None,
+        runtime_overrides: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         draft = self.load_draft(project_id, draft_id)
         batch_id = make_id("batch")
@@ -721,7 +772,12 @@ class StudioStore:
         if (draft_dir / "source").exists():
             copy_tree(draft_dir / "source", batch_dir / "source")
 
+        runtime_settings = self._merge_submission_runtime_settings(draft["runtime_settings"], runtime_overrides)
         tasks = self._selected_tasks(draft["tasks"], selected_task_ids)
+        previous_runtime = dict(draft.get("runtime_settings", {}))
+        seed_keys = ("seed_mode", "seed_fixed", "seed_base")
+        update_seeds = any(previous_runtime.get(key) != runtime_settings.get(key) for key in seed_keys)
+        self._refresh_task_runtime_fields(tasks, runtime_settings, update_seeds=update_seeds)
         manifest = {
             "id": batch_id,
             "project_id": project_id,
@@ -733,7 +789,7 @@ class StudioStore:
             "updated_at": now_iso(),
             "latest_run_id": "",
             "schedule": None,
-            "runtime_settings": dict(draft["runtime_settings"]),
+            "runtime_settings": runtime_settings,
             "tasks": tasks,
             "task_count": len(tasks),
             "source_task_count": int(draft["task_count"]),

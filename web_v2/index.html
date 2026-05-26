@@ -46,38 +46,42 @@
                 </div>
               </div>
 
-              <label>
-                <span>Active Profile</span>
-                <select id="draft-profile-id"></select>
-              </label>
-
-              <form id="profile-form" class="stack tight-stack">
-                <label class="drop-zone">
-                  <span>Upload New Workflow (.json)</span>
-                  <input id="workflow-file" type="file" accept=".json,application/json">
-                  <small id="workflow-file-status">选择从 ComfyUI 导出的 API workflow JSON。上传后会保存为可复用 Profile。</small>
-                </label>
+              <div class="workflow-row">
                 <label>
-                  <span>Profile Name</span>
-                  <input id="profile-name" type="text" placeholder="例如：LTX 2.3 i2v production">
+                  <span>Active Profile</span>
+                  <select id="draft-profile-id"></select>
                 </label>
+                <details class="workflow-upload-details">
+                  <summary>增加新工作流</summary>
+                  <form id="profile-form" class="stack tight-stack">
+                    <label class="drop-zone">
+                      <span>Upload New Workflow (.json)</span>
+                      <input id="workflow-file" type="file" accept=".json,application/json">
+                      <small id="workflow-file-status">选择从 ComfyUI 导出的 API workflow JSON。上传后会保存为可复用 Profile。</small>
+                    </label>
+                    <label>
+                      <span>Profile Name</span>
+                      <input id="profile-name" type="text" placeholder="例如：LTX 2.3 i2v production">
+                    </label>
 
-                <details class="advanced-block">
-                  <summary>节点映射修正（通常不用填）</summary>
-                  <div class="mini-grid two">
-                    <label>
-                      <span>SaveVideo Node ID</span>
-                      <input id="save-node-id" type="text" placeholder="例如：75">
-                    </label>
-                    <label>
-                      <span>保存字段名</span>
-                      <input id="save-input-name" type="text" value="filename_prefix">
-                    </label>
-                  </div>
+                    <details class="advanced-block">
+                      <summary>节点映射修正（通常不用填）</summary>
+                      <div class="mini-grid two">
+                        <label>
+                          <span>SaveVideo Node ID</span>
+                          <input id="save-node-id" type="text" placeholder="例如：75">
+                        </label>
+                        <label>
+                          <span>保存字段名</span>
+                          <input id="save-input-name" type="text" value="filename_prefix">
+                        </label>
+                      </div>
+                    </details>
+
+                    <button type="submit" class="ghost-action full-button">保存 Workflow Profile</button>
+                  </form>
                 </details>
-
-                <button type="submit" class="ghost-action full-button">保存 Workflow Profile</button>
-              </form>
+              </div>
               <pre id="profiles-box" class="meta-box compact"></pre>
             </section>
 
@@ -91,35 +95,15 @@
               </div>
 
               <form id="settings-form" class="stack tight-stack">
-                <label>
-                  <span>Backend URL</span>
-                  <input id="comfyui-base-url" type="text" value="http://127.0.0.1:8189">
-                </label>
-                <div class="runtime-profile-box">
-                  <div>
-                    <label>
-                      <span>ComfyUI Docker 模式</span>
-                      <select id="comfyui-runtime-profile">
-                        <option value="stable">稳定优先：低显存 / 最稳 / 慢</option>
-                        <option value="balanced">均衡模式：日常默认</option>
-                        <option value="performance">性能优先：最快 / 更容易 OOM</option>
-                        <option value="ultra-stable">极稳模式：CPU VAE / 最慢 / 兜底</option>
-                      </select>
-                    </label>
-                    <small id="comfyui-runtime-status">正在读取 Docker / GPU 状态...</small>
-                  </div>
-                  <div class="runtime-actions">
-                    <button id="apply-comfyui-runtime-btn" type="button" class="ghost-action">应用模式</button>
-                    <button id="diagnose-comfyui-btn" type="button" class="ghost-action">诊断 OOM</button>
-                  </div>
-                  <pre id="comfyui-runtime-output" class="runtime-output hidden"></pre>
-                </div>
-                <label>
-                  <span>ComfyUI 保存子目录</span>
-                  <input id="comfyui-output-dir" type="text" placeholder="例如：video/batch_studio_v2">
-                  <small>这是 SaveVideo 的相对子目录，不是 E 盘绝对路径。若要保存到 E 盘，请在 ComfyUI 启动参数里设置 output-directory。</small>
-                </label>
-                <div class="mini-grid two">
+                <div class="runtime-grid">
+                  <label class="span-two">
+                    <span>Backend URL</span>
+                    <input id="comfyui-base-url" type="text" value="http://127.0.0.1:8189">
+                  </label>
+                  <label>
+                    <span>ComfyUI 保存子目录</span>
+                    <input id="comfyui-output-dir" type="text" placeholder="例如：video/batch_studio_v2">
+                  </label>
                   <label>
                     <span>文件名前缀</span>
                     <input id="output-name-prefix" type="text" placeholder="例如：0523_zodiac_">
@@ -135,9 +119,6 @@
                       <option value="custom">自定义</option>
                     </select>
                   </label>
-                </div>
-
-                <div class="mini-grid two">
                   <label>
                     <span>输出宽度</span>
                     <input id="width-pixels" type="number" min="1" placeholder="1280">
@@ -146,17 +127,12 @@
                     <span>输出高度</span>
                     <input id="height-pixels" type="number" min="1" placeholder="720">
                   </label>
-                </div>
-
-                <label>
-                  <span>生成时长</span>
-                  <select id="duration-seconds">
-                    <option value="5">5s</option>
-                  </select>
-                  <small id="duration-help">上传 workflow 后，工作台会尝试识别可控制的 Duration 节点。</small>
-                </label>
-
-                <div class="mini-grid two">
+                  <label>
+                    <span>生成时长</span>
+                    <select id="duration-seconds">
+                      <option value="5">5s</option>
+                    </select>
+                  </label>
                   <label>
                     <span>Seed 模式</span>
                     <select id="seed-mode">
@@ -168,14 +144,30 @@
                     <span>固定 Seed</span>
                     <input id="seed-fixed" type="number" value="1">
                   </label>
+                  <label class="span-two">
+                    <span>Negative Prompt</span>
+                    <textarea id="negative-prompt-text" rows="2" placeholder="可选，例如：text, watermark, low quality"></textarea>
+                  </label>
                 </div>
 
-                <label>
-                  <span>Negative Prompt</span>
-                  <textarea id="negative-prompt-text" rows="3" placeholder="可选，例如：text, watermark, low quality"></textarea>
-                </label>
-
-                <button type="submit" class="ghost-action full-button">保存运行参数</button>
+                <div class="runtime-profile-box">
+                  <label>
+                    <span>ComfyUI Docker 模式</span>
+                    <select id="comfyui-runtime-profile">
+                      <option value="stable">稳定优先：低显存 / 最稳 / 慢</option>
+                      <option value="balanced">均衡模式：日常默认</option>
+                      <option value="performance">性能优先：最快 / 更容易 OOM</option>
+                      <option value="ultra-stable">极稳模式：CPU VAE / 最慢 / 兜底</option>
+                    </select>
+                  </label>
+                  <small id="comfyui-runtime-status">正在读取 Docker / GPU 状态...</small>
+                  <div class="runtime-actions">
+                    <button id="apply-comfyui-runtime-btn" type="button" class="ghost-action">应用模式</button>
+                    <button id="diagnose-comfyui-btn" type="button" class="ghost-action">诊断 OOM</button>
+                    <button type="submit" class="ghost-action">保存默认参数</button>
+                  </div>
+                  <pre id="comfyui-runtime-output" class="runtime-output hidden"></pre>
+                </div>
                 <div id="settings-status" class="summary-text"></div>
               </form>
             </section>
@@ -195,14 +187,17 @@
                 <input id="draft-mode" type="hidden" value="t2v">
                 <div id="upload-checklist" class="upload-checklist"></div>
 
-                <label>
-                  <span>Positive Prompts JSON</span>
+                <label class="prompt-input-block">
+                  <span class="prompt-input-head">
+                    <span>Positive Prompts JSON</span>
+                    <span class="file-button">
+                      上传 prompts
+                      <input id="prompts-file" type="file" accept=".json,.txt,text/plain,application/json">
+                    </span>
+                  </span>
                   <textarea id="prompts-text" class="code-box prompt-box" spellcheck="false" placeholder='支持 JSON 数组/对象，也支持单条 prompt 或每行一条：&#10;镜头1 prompt&#10;镜头2 prompt'></textarea>
                 </label>
-                <div class="inline-actions">
-                  <input id="prompts-file" type="file" accept=".json,.txt,text/plain,application/json">
-                  <span id="prompts-input-status" class="hint">必需：粘贴 JSON、单条 prompt，或每行一条 prompt。</span>
-                </div>
+                <span id="prompts-input-status" class="hint">必需：粘贴 JSON、单条 prompt，或每行一条 prompt。</span>
 
                 <div id="storyboard-fields" class="mode-fields stack hidden">
                   <label>

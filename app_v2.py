@@ -328,6 +328,17 @@ def selected_task_ids_from_payload(payload: dict[str, Any] | None) -> list[str] 
     return task_ids
 
 
+def runtime_overrides_from_payload(payload: dict[str, Any] | None) -> dict[str, Any]:
+    if not payload:
+        return {}
+    raw_overrides = payload.get("runtime_overrides")
+    if raw_overrides is None:
+        return {}
+    if not isinstance(raw_overrides, dict):
+        raise HTTPException(status_code=400, detail="runtime_overrides must be an object.")
+    return raw_overrides
+
+
 async def read_text_upload(file: UploadFile | None, label: str) -> str:
     if not file:
         raise HTTPException(status_code=400, detail=f"{label} file is required.")
@@ -694,6 +705,7 @@ def submit_draft(project_id: str, draft_id: str, payload: dict[str, Any] | None 
             draft_id,
             status="queued",
             selected_task_ids=selected_task_ids_from_payload(payload),
+            runtime_overrides=runtime_overrides_from_payload(payload),
         )
         run = store.create_run_from_batch(project_id, batch["id"], reason="new")
         runner.enqueue_run(project_id, run["id"])
@@ -716,6 +728,7 @@ def plan_draft(project_id: str, draft_id: str, payload: dict[str, Any] | None = 
             draft_id,
             status="planned",
             selected_task_ids=selected_task_ids_from_payload(payload),
+            runtime_overrides=runtime_overrides_from_payload(payload),
         )
         return {"ok": True, "batch": serialize_batch(project_id, batch)}
     except FileNotFoundError as exc:

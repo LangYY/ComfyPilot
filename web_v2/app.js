@@ -891,14 +891,16 @@ function updateDraftSelectionStatus() {
 
 function draftSubmitPayload() {
   const scope = document.querySelector("#draft-submit-scope")?.value || "all";
+  const payload = { runtime_overrides: runtimeOverrides() };
   if (scope !== "selected") {
-    return {};
+    return payload;
   }
   const ids = selectedDraftTaskIds();
   if (!ids.length) {
     throw new Error("请至少勾选一条任务。");
   }
-  return { selected_task_ids: ids };
+  payload.selected_task_ids = ids;
+  return payload;
 }
 
 function taskStatusPill(status) {
