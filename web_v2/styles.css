@@ -470,7 +470,7 @@ textarea:focus {
 
 .runtime-grid {
   display: grid;
-  grid-template-columns: repeat(6, minmax(0, 1fr));
+  grid-template-columns: 1.15fr 1.35fr 1.15fr 1.15fr 1fr 0.85fr 0.85fr 0.85fr 0.9fr;
   gap: 10px;
 }
 
@@ -478,16 +478,12 @@ textarea:focus {
   grid-column: span 2;
 }
 
-.runtime-grid textarea {
-  min-height: 72px;
-}
-
 .runtime-profile-box {
   display: grid;
-  grid-template-columns: minmax(240px, 1fr) auto minmax(240px, 0.8fr);
+  grid-template-columns: minmax(0, 1fr) auto;
   gap: 10px 14px;
   align-items: center;
-  padding: 10px 12px;
+  padding: 8px 10px;
   border: 1px solid rgba(149, 212, 179, 0.14);
   border-radius: var(--radius);
   background: rgba(13, 15, 13, 0.38);
@@ -510,7 +506,7 @@ textarea:focus {
 }
 
 .runtime-profile-box > small {
-  grid-column: 3;
+  grid-column: 1;
   grid-row: 1;
 }
 

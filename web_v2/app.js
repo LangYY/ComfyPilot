@@ -350,7 +350,6 @@ function runtimeOverrides() {
     seed_base: fixedSeed,
     save_prefix_root: normalizeSaveSubfolder(document.querySelector("#comfyui-output-dir").value),
     output_name_prefix: document.querySelector("#output-name-prefix").value.trim(),
-    negative_prompt_text: document.querySelector("#negative-prompt-text").value.trim(),
     width_pixels: parseOptionalInteger("#width-pixels"),
     height_pixels: parseOptionalInteger("#height-pixels"),
     duration_seconds: parseOptionalInteger("#duration-seconds"),
@@ -401,7 +400,6 @@ function hydrateSettings(projectDetail) {
   document.querySelector("#comfyui-base-url").value = project.comfyui?.base_url || "http://127.0.0.1:8189";
   document.querySelector("#comfyui-output-dir").value = normalizeSaveSubfolder(saveSubfolder);
   document.querySelector("#output-name-prefix").value = defaults.output_name_prefix || "";
-  document.querySelector("#negative-prompt-text").value = defaults.negative_prompt_text || "";
   document.querySelector("#seed-mode").value = defaults.seed_mode || "random";
   document.querySelector("#seed-fixed").value = defaults.seed_fixed || defaults.seed_base || 1;
   document.querySelector("#width-pixels").value = defaults.width_pixels || "1280";

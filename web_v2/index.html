@@ -8,7 +8,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&family=Plus+Jakarta+Sans:wght@600;700;800&display=swap" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@200..700,0..1&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/assets-v2/styles.css?v=20260526-density-tabs">
+    <link rel="stylesheet" href="/assets-v2/styles.css?v=20260526-runtime-order">
   </head>
   <body data-active-tab="submit">
     <header class="topbar">
@@ -95,8 +95,17 @@
 
               <form id="settings-form" class="stack tight-stack">
                 <div class="runtime-grid">
-                  <label class="span-two">
-                    <span>Backend URL</span>
+                  <label>
+                    <span>ComfyUI Docker 模式</span>
+                    <select id="comfyui-runtime-profile">
+                      <option value="stable">稳定优先</option>
+                      <option value="balanced">均衡模式</option>
+                      <option value="performance">性能优先</option>
+                      <option value="ultra-stable">极稳模式</option>
+                    </select>
+                  </label>
+                  <label>
+                    <span>ComfyUI 运行地址</span>
                     <input id="comfyui-base-url" type="text" value="http://127.0.0.1:8189">
                   </label>
                   <label>
@@ -143,22 +152,9 @@
                     <span>固定 Seed</span>
                     <input id="seed-fixed" type="number" value="1">
                   </label>
-                  <label class="span-two">
-                    <span>Negative Prompt</span>
-                    <textarea id="negative-prompt-text" rows="2" placeholder="可选，例如：text, watermark, low quality"></textarea>
-                  </label>
                 </div>
 
                 <div class="runtime-profile-box">
-                  <label>
-                    <span>ComfyUI Docker 模式</span>
-                    <select id="comfyui-runtime-profile">
-                      <option value="stable">稳定优先：低显存 / 最稳 / 慢</option>
-                      <option value="balanced">均衡模式：日常默认</option>
-                      <option value="performance">性能优先：最快 / 更容易 OOM</option>
-                      <option value="ultra-stable">极稳模式：CPU VAE / 最慢 / 兜底</option>
-                    </select>
-                  </label>
                   <small id="comfyui-runtime-status">正在读取 Docker / GPU 状态...</small>
                   <div class="runtime-actions">
                     <button id="apply-comfyui-runtime-btn" type="button" class="ghost-action">应用模式</button>
@@ -444,6 +440,6 @@
       </section>
     </div>
 
-    <script src="/assets-v2/app.js?v=20260526-density-tabs"></script>
+    <script src="/assets-v2/app.js?v=20260526-runtime-order"></script>
   </body>
 </html>
