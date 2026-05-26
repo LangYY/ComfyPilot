@@ -1,5 +1,5 @@
 param(
-  [ValidateSet("stable", "balanced", "performance")]
+  [ValidateSet("stable", "balanced", "performance", "ultra-stable")]
   [string]$Profile = "balanced",
   [string]$ComposeDir = "E:\AI_Projects\ComfyUI-Project\pytorch2.8.0-cu128"
 )

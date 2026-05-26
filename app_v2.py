@@ -9,6 +9,7 @@ import socket
 import subprocess
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlparse
 
 import requests
 from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
@@ -39,6 +40,22 @@ COMFYUI_DOCKER_DIR = Path(
 COMFYUI_DOCKER_STATE_PATH = COMFYUI_DOCKER_DIR / "comfyui_runtime_profile.json"
 SWITCH_COMFYUI_PROFILE_SCRIPT = ROOT / "scripts" / "switch_comfyui_docker_profile.ps1"
 DIAGNOSE_COMFYUI_SCRIPT = ROOT / "scripts" / "diagnose_comfyui_docker.ps1"
+COMFYUI_RUNTIME_TARGETS = {
+    "8189": {
+        "id": "legacy",
+        "label": "旧稳定容器",
+        "container_name": "comfyui_cu128_v0812",
+        "compose_dir": Path(r"E:\AI_Projects\ComfyUI-Project\pytorch2.8.0-cu128"),
+        "url": "http://127.0.0.1:8189",
+    },
+    "8191": {
+        "id": "ltx_rebuild",
+        "label": "新 LTX 重构容器",
+        "container_name": "comfyui_ltx_rebuild_20260526",
+        "compose_dir": Path(r"E:\AI_Projects\ComfyUI-Project\ltx_rebuild_20260526"),
+        "url": "http://127.0.0.1:8191",
+    },
+}
 COMFYUI_RUNTIME_PROFILES = {
     "stable": {
         "label": "稳定优先",
@@ -52,6 +69,10 @@ COMFYUI_RUNTIME_PROFILES = {
         "label": "性能优先",
         "description": "高显存模式，预留 1GB 显存。最快但最容易 OOM，只建议短批次或低分辨率。",
     },
+}
+COMFYUI_RUNTIME_PROFILES["ultra-stable"] = {
+    "label": "极稳模式",
+    "description": "低显存 + CPU VAE，速度更慢，适合排查崩溃或无人值守兜底。",
 }
 
 app = FastAPI(title="ComfyPilot")
@@ -157,11 +178,30 @@ def command_available(command: list[str], *, timeout_seconds: int = 4) -> tuple[
     return completed.returncode == 0, output
 
 
-def read_comfyui_runtime_profile_state() -> dict[str, Any]:
-    if not COMFYUI_DOCKER_STATE_PATH.exists():
+def resolve_comfyui_runtime_target(base_url: str) -> dict[str, Any]:
+    parsed = urlparse(str(base_url or "").strip())
+    port = str(parsed.port or "")
+    target = COMFYUI_RUNTIME_TARGETS.get(port)
+    if not target:
+        return {
+            "known": False,
+            "port": port,
+            "label": "未登记的 ComfyUI 地址",
+            "message": "这个 URL 没有登记到本机 Docker 容器，不能从工作台重启或切换模式。",
+        }
+    return {
+        "known": True,
+        **target,
+        "compose_dir": str(target["compose_dir"]),
+    }
+
+
+def read_comfyui_runtime_profile_state(compose_dir: Path | str | None = None) -> dict[str, Any]:
+    state_path = Path(compose_dir) / "comfyui_runtime_profile.json" if compose_dir else COMFYUI_DOCKER_STATE_PATH
+    if not state_path.exists():
         return {}
     try:
-        return json.loads(COMFYUI_DOCKER_STATE_PATH.read_text(encoding="utf-8"))
+        return json.loads(state_path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError):
         return {}
 
@@ -353,11 +393,13 @@ def access_info(request: Request) -> dict[str, Any]:
 
 
 @app.get("/api/comfyui/runtime-profiles")
-def comfyui_runtime_profiles() -> dict[str, Any]:
+def comfyui_runtime_profiles(comfyui_base_url: str | None = None) -> dict[str, Any]:
     project_id = selected_project_payload()["selected_project_id"]
     project = store.load_project(project_id)
-    base_url = str(project.get("comfyui", {}).get("base_url", "http://127.0.0.1:8189")).rstrip("/")
-    state_payload = read_comfyui_runtime_profile_state()
+    base_url = str(comfyui_base_url or project.get("comfyui", {}).get("base_url", "http://127.0.0.1:8189")).rstrip("/")
+    runtime_target = resolve_comfyui_runtime_target(base_url)
+    compose_dir = runtime_target.get("compose_dir") if runtime_target.get("known") else str(COMFYUI_DOCKER_DIR)
+    state_payload = read_comfyui_runtime_profile_state(compose_dir)
     docker_ok, docker_message = command_available(["docker", "version"])
     nvidia_ok, nvidia_message = command_available(
         ["nvidia-smi", "--query-gpu=memory.used,memory.total,utilization.gpu,temperature.gpu", "--format=csv,noheader,nounits"]
@@ -374,7 +416,9 @@ def comfyui_runtime_profiles() -> dict[str, Any]:
         "profiles": COMFYUI_RUNTIME_PROFILES,
         "current_profile": state_payload.get("profile", "unknown"),
         "state": state_payload,
-        "compose_dir": str(COMFYUI_DOCKER_DIR),
+        "target": runtime_target,
+        "known_target": bool(runtime_target.get("known")),
+        "compose_dir": str(compose_dir),
         "comfyui_url": base_url,
         "docker_available": docker_ok,
         "docker_message": docker_message,
@@ -390,6 +434,15 @@ def apply_comfyui_runtime_profile(payload: dict[str, Any]) -> dict[str, Any]:
     profile = str(payload.get("profile", "")).strip().lower()
     if profile not in COMFYUI_RUNTIME_PROFILES:
         raise HTTPException(status_code=400, detail=f"Unknown ComfyUI runtime profile: {profile}")
+    base_url = str(payload.get("comfyui_base_url") or "").strip().rstrip("/")
+    if not base_url:
+        project_id = selected_project_payload()["selected_project_id"]
+        project = store.load_project(project_id)
+        base_url = str(project.get("comfyui", {}).get("base_url", "http://127.0.0.1:8189")).rstrip("/")
+    runtime_target = resolve_comfyui_runtime_target(base_url)
+    if not runtime_target.get("known"):
+        raise HTTPException(status_code=400, detail=runtime_target.get("message", "Unknown ComfyUI runtime target."))
+    compose_dir = str(runtime_target["compose_dir"])
     force = bool(payload.get("force", False))
     queue_state = store.load_queue_state()
     if not force and (queue_state.get("current") or queue_state.get("queued")):
@@ -399,7 +452,7 @@ def apply_comfyui_runtime_profile(payload: dict[str, Any]) -> dict[str, Any]:
         )
     result = run_powershell_script(
         SWITCH_COMFYUI_PROFILE_SCRIPT,
-        ["-Profile", profile, "-ComposeDir", str(COMFYUI_DOCKER_DIR)],
+        ["-Profile", profile, "-ComposeDir", compose_dir],
         timeout_seconds=240,
     )
     if result["returncode"] != 0:
@@ -409,19 +462,27 @@ def apply_comfyui_runtime_profile(payload: dict[str, Any]) -> dict[str, Any]:
         "ok": True,
         "profile": profile,
         "profile_info": COMFYUI_RUNTIME_PROFILES[profile],
+        "target": runtime_target,
         "result": result,
-        "status": comfyui_runtime_profiles(),
+        "status": comfyui_runtime_profiles(base_url),
     }
 
 
 @app.post("/api/comfyui/runtime-profiles/diagnose")
-def diagnose_comfyui_runtime_profile() -> dict[str, Any]:
+def diagnose_comfyui_runtime_profile(payload: dict[str, Any] | None = None) -> dict[str, Any]:
+    base_url = str((payload or {}).get("comfyui_base_url") or "").strip().rstrip("/")
+    if not base_url:
+        project_id = selected_project_payload()["selected_project_id"]
+        project = store.load_project(project_id)
+        base_url = str(project.get("comfyui", {}).get("base_url", "http://127.0.0.1:8189")).rstrip("/")
+    runtime_target = resolve_comfyui_runtime_target(base_url)
+    compose_dir = str(runtime_target.get("compose_dir") or COMFYUI_DOCKER_DIR)
     result = run_powershell_script(
         DIAGNOSE_COMFYUI_SCRIPT,
-        ["-ComposeDir", str(COMFYUI_DOCKER_DIR)],
+        ["-ComposeDir", compose_dir],
         timeout_seconds=90,
     )
-    return {"ok": result["returncode"] == 0, "result": result}
+    return {"ok": result["returncode"] == 0, "target": runtime_target, "result": result}
 
 
 @app.post("/api/projects")

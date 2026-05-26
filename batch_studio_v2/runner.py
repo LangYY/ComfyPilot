@@ -3,6 +3,7 @@ from __future__ import annotations
 import copy
 import json
 import os
+import re
 import shutil
 import subprocess
 import threading
@@ -23,6 +24,10 @@ from .store import StudioStore
 FINAL_RUN_STATUSES = {"completed", "failed", "stopped", "cancelled", "interrupted"}
 FINAL_TASK_STATUSES = {"completed", "failed", "cancelled", "unknown", "interrupted"}
 DEFAULT_DIAGNOSTIC_DOCKER_REF = "comfyui_cu128_v0812"
+DIAGNOSTIC_DOCKER_REFS_BY_PORT = {
+    "8189": "comfyui_cu128_v0812",
+    "8191": "comfyui_ltx_rebuild_20260526",
+}
 
 
 class RunnerLock:
@@ -578,8 +583,17 @@ class QueueRunner:
             rows.append(dict(zip(fields, values)))
         return {"available": True, "gpus": rows}
 
-    def _docker_snapshot(self) -> dict[str, Any]:
-        ref = os.environ.get("COMFYPILOT_DIAG_DOCKER_REF", DEFAULT_DIAGNOSTIC_DOCKER_REF)
+    def _diagnostic_docker_ref(self, base_url: str | None = None) -> str:
+        configured = os.environ.get("COMFYPILOT_DIAG_DOCKER_REF", "").strip()
+        if configured:
+            return configured
+        match = re.search(r":(\d+)(?:/|$)", str(base_url or ""))
+        if match:
+            return DIAGNOSTIC_DOCKER_REFS_BY_PORT.get(match.group(1), DEFAULT_DIAGNOSTIC_DOCKER_REF)
+        return DEFAULT_DIAGNOSTIC_DOCKER_REF
+
+    def _docker_snapshot(self, base_url: str | None = None) -> dict[str, Any]:
+        ref = self._diagnostic_docker_ref(base_url)
         ok, output = self._command_text(["docker", "inspect", ref], timeout=8)
         if not ok:
             return {"available": False, "ref": ref, "error": output}
@@ -720,7 +734,7 @@ class QueueRunner:
             "media_values": media_values,
             "workflow_runtime_values": self._runtime_field_values(workflow, bindings),
             "gpu": self._gpu_snapshot(),
-            "docker": self._docker_snapshot(),
+            "docker": self._docker_snapshot(project.get("comfyui", {}).get("base_url")),
         }
         path.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
         return path
@@ -737,6 +751,7 @@ class QueueRunner:
         run_dir: Path,
         run: dict[str, Any],
         task: dict[str, Any],
+        base_url: str,
         interval_seconds: float,
     ) -> tuple[threading.Event, threading.Thread, Path]:
         diagnostics_dir = run_dir / "diagnostics"
@@ -758,7 +773,7 @@ class QueueRunner:
                         "task_status": task.get("status"),
                         "prompt_id": task.get("prompt_id"),
                         "gpu": self._gpu_snapshot(),
-                        "docker": self._docker_snapshot(),
+                        "docker": self._docker_snapshot(base_url),
                     },
                 )
                 stop_event.wait(interval)
@@ -1058,6 +1073,7 @@ class QueueRunner:
                     run_dir=run_dir,
                     run=run,
                     task=task,
+                    base_url=base_url,
                     interval_seconds=float(run_settings.get("poll_interval_seconds", 5)),
                 )
                 task.setdefault("diagnostics", {})["samples"] = to_relative_string(run_dir, sampler_path)

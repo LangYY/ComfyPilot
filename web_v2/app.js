@@ -404,14 +404,18 @@ function renderRuntimeProfileStatus(payload) {
     select.value = payload.current_profile;
   }
   const current = payload.profiles?.[payload.current_profile];
+  const target = payload.target || {};
+  const targetText = target.known ? target.label || target.id : "未登记容器";
   const gpuText = payload.nvidia_smi ? `GPU ${payload.nvidia_smi}` : "GPU 状态未知";
   const dockerText = payload.docker_available ? "Docker 可用" : "Docker 未连接";
   const comfyText = payload.comfyui_reachable ? "ComfyUI 可达" : "ComfyUI 不可达";
-  status.textContent = `${current?.label || "未应用模式"} | ${dockerText} | ${comfyText} | ${gpuText}`;
+  status.textContent = `${targetText} | ${current?.label || "未应用模式"} | ${dockerText} | ${comfyText} | ${gpuText}`;
 }
 
 async function loadRuntimeProfileStatus() {
-  const payload = await api("/api/comfyui/runtime-profiles");
+  const baseUrl = document.querySelector("#comfyui-base-url")?.value.trim() || "";
+  const query = baseUrl ? `?comfyui_base_url=${encodeURIComponent(baseUrl)}` : "";
+  const payload = await api(`/api/comfyui/runtime-profiles${query}`);
   renderRuntimeProfileStatus(payload);
   return payload;
 }
@@ -428,7 +432,7 @@ async function applyRuntimeProfile(force = false) {
     const payload = await api("/api/comfyui/runtime-profiles/apply", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ profile, force }),
+      body: JSON.stringify({ profile, force, comfyui_base_url: document.querySelector("#comfyui-base-url").value.trim() }),
     });
     renderRuntimeProfileStatus(payload.status);
     const result = payload.result || {};
@@ -450,7 +454,7 @@ async function diagnoseComfyUIRuntime() {
   const payload = await api("/api/comfyui/runtime-profiles/diagnose", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: "{}",
+    body: JSON.stringify({ comfyui_base_url: document.querySelector("#comfyui-base-url").value.trim() }),
   });
   const result = payload.result || {};
   showRuntimeOutput([result.stdout, result.stderr].filter(Boolean).join("\n").trim() || "没有诊断输出。");
