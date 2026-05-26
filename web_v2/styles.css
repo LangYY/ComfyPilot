@@ -750,6 +750,20 @@ a {
   white-space: nowrap;
 }
 
+.batch-info-cell {
+  max-width: 320px;
+  white-space: normal;
+}
+
+.batch-info-cell small {
+  display: block;
+  margin-top: 5px;
+  color: var(--outline);
+  font-family: "Satoshi", "Noto Sans SC", sans-serif;
+  font-size: 11px;
+  line-height: 1.45;
+}
+
 .run-progress {
   display: grid;
   gap: 7px;

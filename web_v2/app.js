@@ -188,6 +188,34 @@ function selectedProfile() {
   return currentProfiles().find((profile) => profile.id === profileId) || null;
 }
 
+function profileNameFor(profileId) {
+  const profile = currentProfiles().find((item) => item.id === profileId);
+  return profile?.name || profileId || "-";
+}
+
+function runtimeSettingsFor(item) {
+  return item?.run_settings || item?.runtime_settings || {};
+}
+
+function savePathLabel(settings = {}) {
+  const savePrefix = settings.save_prefix_root || "";
+  const finalOutput = settings.final_output_dir || "";
+  if (finalOutput) {
+    return `最终 ${finalOutput}`;
+  }
+  if (savePrefix) {
+    return `ComfyUI ${savePrefix}`;
+  }
+  return "-";
+}
+
+function batchMetaLine(item) {
+  const settings = runtimeSettingsFor(item);
+  const duration = settings.duration_seconds ? `${settings.duration_seconds}s` : "-";
+  const savePath = savePathLabel(settings);
+  return `Workflow: ${profileNameFor(item?.profile_id)} | 视频时长: ${duration} | 保存: ${savePath}`;
+}
+
 function countPromptPayload(payload) {
   if (typeof payload === "string") {
     return payload.trim() ? 1 : 0;
@@ -932,12 +960,22 @@ function userIsPreviewingMedia() {
 }
 
 function renderInputRefs(inputUrls = []) {
-  if (!inputUrls.length) {
+  const uniqueRefs = [];
+  const seen = new Set();
+  for (const ref of inputUrls || []) {
+    const key = ref.url || ref.path || `${ref.kind || ""}:${ref.label || ""}`;
+    if (seen.has(key)) {
+      continue;
+    }
+    seen.add(key);
+    uniqueRefs.push(ref);
+  }
+  if (!uniqueRefs.length) {
     return "-";
   }
   return `
     <div class="input-preview-list">
-      ${inputUrls.map((ref) => {
+      ${uniqueRefs.map((ref) => {
         const url = withAccessToken(ref.url || "");
         const label = ref.label || ref.kind || "input";
         const image = isImageUrl(ref.url)
@@ -1084,7 +1122,10 @@ function renderRunRows(runs, targetSelector, emptyText) {
       <tr class="${state.selectedRunId === run.id ? "row-expanded" : ""}">
         <td class="mono-cell" title="${escapeHtml(run.id)}">${escapeHtml(run.id)}</td>
         <td><span class="status-pill ${escapeHtml(run.status)}">${escapeHtml(RUN_STATUS_LABELS[run.status] || run.status)}</span></td>
-        <td class="mono-cell" title="${escapeHtml(run.batch_id)}">${escapeHtml(run.batch_id)}</td>
+        <td class="mono-cell batch-info-cell" title="${escapeHtml(run.batch_id)}">
+          ${escapeHtml(run.batch_id)}
+          <small>${escapeHtml(batchMetaLine(run))}</small>
+        </td>
         <td>${escapeHtml(run.created_at || "-")}</td>
         <td>${renderRunProgress(run)}</td>
         <td>${runActionButtons(run)}</td>
@@ -1108,7 +1149,11 @@ function renderPlannedBatches(batches) {
       : "";
     return `
       <tr class="${state.selectedBatchId === batch.id ? "row-expanded" : ""}">
-        <td class="mono-cell" title="${escapeHtml(batch.id)}">${escapeHtml(batch.id)}<br><small>${escapeHtml(batch.source_kind || "-")}</small></td>
+        <td class="mono-cell batch-info-cell" title="${escapeHtml(batch.id)}">
+          ${escapeHtml(batch.id)}
+          <small>${escapeHtml(batch.source_kind || "-")}</small>
+          <small>${escapeHtml(batchMetaLine(batch))}</small>
+        </td>
         <td><span class="status-pill ${escapeHtml(batch.status || "planned")}">${escapeHtml(batch.status === "scheduled" ? "已预约" : "已暂存")}</span></td>
         <td>${escapeHtml(batch.created_at || "-")}</td>
         <td>${escapeHtml(batch.task_count || 0)}</td>
@@ -1180,6 +1225,7 @@ function renderRunDetailContent(run) {
         <td>${escapeHtml(task.started_at || "-")}</td>
         <td>${escapeHtml(task.finished_at || "-")}</td>
         <td>${escapeHtml(formatSeconds(task.duration_seconds))}</td>
+        <td>${renderInputRefs(task.input_urls || [])}</td>
         <td>${output}${finalPath}</td>
         <td>${escapeHtml(task.error || "")}</td>
         <td>${retryButton}</td>
@@ -1214,12 +1260,13 @@ function renderRunDetailContent(run) {
               <th>开始等待</th>
               <th>结束时间</th>
               <th>生成用时</th>
+              <th>输入素材</th>
               <th>输出</th>
               <th>错误</th>
               <th>操作</th>
             </tr>
           </thead>
-          <tbody>${rows || '<tr><td colspan="10">没有任务明细。</td></tr>'}</tbody>
+          <tbody>${rows || '<tr><td colspan="11">没有任务明细。</td></tr>'}</tbody>
         </table>
       </div>
       <pre class="logs-box">${escapeHtml(logs || "暂无日志。")}</pre>
@@ -1248,6 +1295,7 @@ function renderBatchDetailContent(batch) {
         <div>
           <strong>${escapeHtml(batch.id)}</strong>
           <p>${escapeHtml(batch.status || "planned")} | ${escapeHtml(batch.source_kind || "-")} | ${escapeHtml(batch.task_count || 0)} 个任务</p>
+          <p>${escapeHtml(batchMetaLine(batch))}</p>
         </div>
       </div>
       <div class="table-wrap">
