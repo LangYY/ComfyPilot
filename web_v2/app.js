@@ -541,12 +541,13 @@ function renderDurationOptions(profile) {
   }
   const previous = select.value || select.dataset.savedValue || "";
   const duration = durationOptionsForProfile(profile);
-  select.innerHTML = '<option value="">Workflow 默认</option>'
-    + duration.values.map((seconds) => `<option value="${seconds}">${seconds}s</option>`).join("");
+  select.innerHTML = duration.values.map((seconds) => `<option value="${seconds}">${seconds}s</option>`).join("");
   if (previous && Array.from(select.options).some((option) => option.value === String(previous))) {
     select.value = previous;
   } else if (duration.defaultValue) {
     select.value = String(duration.defaultValue);
+  } else if (duration.values.length) {
+    select.value = String(duration.values.includes(5) ? 5 : duration.values[0]);
   }
   if (help) {
     help.textContent = duration.detected
