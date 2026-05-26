@@ -484,15 +484,12 @@ textarea:focus {
 }
 
 .runtime-row-secondary {
-  grid-template-columns: 1.1fr 0.8fr 0.8fr 0.8fr 0.9fr;
+  grid-template-columns: 1fr 0.68fr 0.68fr 0.72fr 0.82fr 0.72fr;
 }
 
-.seed-control {
-  grid-template-columns: 1fr;
-}
-
-.seed-control #seed-fixed {
-  margin-top: 6px;
+.seed-fixed-slot.seed-placeholder {
+  visibility: hidden;
+  pointer-events: none;
 }
 
 .runtime-profile-box {

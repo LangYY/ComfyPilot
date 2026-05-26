@@ -521,7 +521,7 @@ function setActiveMode(mode) {
 
 function updateSeedFieldVisibility() {
   const fixed = document.querySelector("#seed-mode").value === "fixed";
-  document.querySelector("#seed-fixed").classList.toggle("hidden", !fixed);
+  document.querySelector("#seed-fixed-field").classList.toggle("seed-placeholder", !fixed);
 }
 
 function applySizePreset() {
