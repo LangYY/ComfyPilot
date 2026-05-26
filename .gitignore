@@ -8,6 +8,7 @@ studio_v2_data/
 outputs/
 cells/
 failed_jobs.json
+crash_diagnostics_report.json
 storyboard_3x4.png
 *.mp4
 *.mov

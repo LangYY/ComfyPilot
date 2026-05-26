@@ -4,6 +4,7 @@ import copy
 import json
 import os
 import shutil
+import subprocess
 import threading
 import time
 import uuid
@@ -21,6 +22,7 @@ from .store import StudioStore
 
 FINAL_RUN_STATUSES = {"completed", "failed", "stopped", "cancelled", "interrupted"}
 FINAL_TASK_STATUSES = {"completed", "failed", "cancelled", "unknown", "interrupted"}
+DEFAULT_DIAGNOSTIC_DOCKER_REF = "comfyui_cu128_v0812"
 
 
 class RunnerLock:
@@ -529,6 +531,246 @@ class QueueRunner:
                 )
         return bindings
 
+    def _command_text(self, command: list[str], *, timeout: int = 10) -> tuple[bool, str]:
+        try:
+            completed = subprocess.run(
+                command,
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                timeout=timeout,
+                check=False,
+            )
+        except Exception as exc:
+            return False, str(exc)
+        output = "\n".join(part for part in (completed.stdout.strip(), completed.stderr.strip()) if part)
+        return completed.returncode == 0, output
+
+    def _gpu_snapshot(self) -> dict[str, Any]:
+        fields = [
+            "timestamp",
+            "name",
+            "driver_version",
+            "pstate",
+            "memory.total",
+            "memory.used",
+            "memory.free",
+            "temperature.gpu",
+            "power.draw",
+            "utilization.gpu",
+        ]
+        ok, output = self._command_text(
+            [
+                "nvidia-smi",
+                f"--query-gpu={','.join(fields)}",
+                "--format=csv,noheader,nounits",
+            ],
+            timeout=8,
+        )
+        if not ok:
+            return {"available": False, "error": output}
+        rows: list[dict[str, Any]] = []
+        for line in output.splitlines():
+            values = [item.strip() for item in line.split(",")]
+            if len(values) != len(fields):
+                continue
+            rows.append(dict(zip(fields, values)))
+        return {"available": True, "gpus": rows}
+
+    def _docker_snapshot(self) -> dict[str, Any]:
+        ref = os.environ.get("COMFYPILOT_DIAG_DOCKER_REF", DEFAULT_DIAGNOSTIC_DOCKER_REF)
+        ok, output = self._command_text(["docker", "inspect", ref], timeout=8)
+        if not ok:
+            return {"available": False, "ref": ref, "error": output}
+        try:
+            payload = json.loads(output)[0]
+        except Exception as exc:
+            return {"available": False, "ref": ref, "error": f"docker inspect parse failed: {exc}"}
+        state = payload.get("State", {})
+        host_config = payload.get("HostConfig", {})
+        return {
+            "available": True,
+            "ref": ref,
+            "id": payload.get("Id", ""),
+            "name": payload.get("Name", ""),
+            "image": payload.get("Config", {}).get("Image", ""),
+            "state": {
+                "status": state.get("Status"),
+                "running": state.get("Running"),
+                "oom_killed": state.get("OOMKilled"),
+                "exit_code": state.get("ExitCode"),
+                "started_at": state.get("StartedAt"),
+                "finished_at": state.get("FinishedAt"),
+                "error": state.get("Error"),
+            },
+            "limits": {
+                "memory": host_config.get("Memory"),
+                "memory_swap": host_config.get("MemorySwap"),
+                "nano_cpus": host_config.get("NanoCpus"),
+                "shm_size": host_config.get("ShmSize"),
+            },
+            "mounts": [
+                {
+                    "source": item.get("Source"),
+                    "destination": item.get("Destination"),
+                    "type": item.get("Type"),
+                }
+                for item in payload.get("Mounts", [])
+            ],
+        }
+
+    def _media_diagnostics(self, paths_by_kind: dict[str, Path]) -> dict[str, Any]:
+        diagnostics: dict[str, Any] = {}
+        for kind, path in paths_by_kind.items():
+            entry: dict[str, Any] = {
+                "path": str(path),
+                "exists": path.exists(),
+            }
+            if path.exists():
+                entry["bytes"] = path.stat().st_size
+                try:
+                    from PIL import Image
+
+                    with Image.open(path) as image:
+                        entry["image_size"] = list(image.size)
+                        entry["image_mode"] = image.mode
+                except Exception as exc:
+                    entry["image_error"] = str(exc)
+            diagnostics[kind] = entry
+        return diagnostics
+
+    def _runtime_field_values(
+        self,
+        workflow: dict[str, dict[str, Any]],
+        bindings: dict[str, Any],
+    ) -> dict[str, Any]:
+        values: dict[str, Any] = {}
+        runtime_fields = dict(bindings.get("runtime_fields", {}))
+        if "duration_seconds" not in runtime_fields:
+            runtime_fields["duration_seconds"] = self._detect_duration_bindings(workflow)
+        for key, field_bindings in runtime_fields.items():
+            values[key] = []
+            for binding in field_bindings or []:
+                node = workflow.get(str(binding.get("id", "")), {})
+                values[key].append(
+                    {
+                        "id": binding.get("id"),
+                        "input_name": binding.get("input_name"),
+                        "value": node.get("inputs", {}).get(binding.get("input_name")),
+                        "class_type": node.get("class_type"),
+                        "title": legacy_batch.node_title(node) if node else binding.get("title", ""),
+                    }
+                )
+        return values
+
+    def _write_task_preflight_diagnostics(
+        self,
+        *,
+        run_dir: Path,
+        project: dict[str, Any],
+        profile: dict[str, Any],
+        batch: dict[str, Any],
+        run: dict[str, Any],
+        task: dict[str, Any],
+        run_settings: dict[str, Any],
+        workflow: dict[str, dict[str, Any]],
+        bindings: dict[str, Any],
+        paths_by_kind: dict[str, Path],
+        media_values: dict[str, str],
+    ) -> Path:
+        diagnostics_dir = run_dir / "diagnostics"
+        diagnostics_dir.mkdir(parents=True, exist_ok=True)
+        path = diagnostics_dir / f"task_{int(task.get('order', 0)):03d}_preflight.json"
+        payload = {
+            "created_at": now_iso(),
+            "runner_id": self.runner_id,
+            "project": {
+                "id": project.get("id"),
+                "name": project.get("name"),
+                "comfyui_base_url": project.get("comfyui", {}).get("base_url"),
+            },
+            "profile": {
+                "id": profile.get("id"),
+                "name": profile.get("name"),
+                "bindings": profile.get("bindings", {}),
+            },
+            "batch": {
+                "id": batch.get("id"),
+                "source_kind": batch.get("source_kind"),
+                "task_count": batch.get("task_count"),
+            },
+            "run": {
+                "id": run.get("id"),
+                "status": run.get("status"),
+                "reason": run.get("reason"),
+            },
+            "task": {
+                "task_id": task.get("task_id"),
+                "order": task.get("order"),
+                "source_index": task.get("source_index"),
+                "expected_output_name": task.get("expected_output_name"),
+                "seed_value": task.get("seed_value"),
+                "prompt_chars": len(str(task.get("prompt_text", ""))),
+                "prompt_preview": str(task.get("prompt_text", ""))[:600],
+                "input_refs": task.get("input_refs", []),
+            },
+            "run_settings": run_settings,
+            "media_paths": self._media_diagnostics(paths_by_kind),
+            "media_values": media_values,
+            "workflow_runtime_values": self._runtime_field_values(workflow, bindings),
+            "gpu": self._gpu_snapshot(),
+            "docker": self._docker_snapshot(),
+        }
+        path.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+        return path
+
+    def _append_task_sample(self, path: Path, payload: dict[str, Any]) -> None:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with path.open("a", encoding="utf-8") as handle:
+            handle.write(json.dumps(payload, ensure_ascii=False) + "\n")
+            handle.flush()
+
+    def _start_task_diagnostic_sampler(
+        self,
+        *,
+        run_dir: Path,
+        run: dict[str, Any],
+        task: dict[str, Any],
+        interval_seconds: float,
+    ) -> tuple[threading.Event, threading.Thread, Path]:
+        diagnostics_dir = run_dir / "diagnostics"
+        diagnostics_dir.mkdir(parents=True, exist_ok=True)
+        path = diagnostics_dir / f"task_{int(task.get('order', 0)):03d}_samples.jsonl"
+        stop_event = threading.Event()
+        interval = max(5.0, min(float(interval_seconds or 10), 30.0))
+
+        def sample_loop() -> None:
+            while not stop_event.is_set():
+                self._append_task_sample(
+                    path,
+                    {
+                        "created_at": now_iso(),
+                        "runner_id": self.runner_id,
+                        "run_id": run.get("id"),
+                        "task_id": task.get("task_id"),
+                        "task_order": task.get("order"),
+                        "task_status": task.get("status"),
+                        "prompt_id": task.get("prompt_id"),
+                        "gpu": self._gpu_snapshot(),
+                        "docker": self._docker_snapshot(),
+                    },
+                )
+                stop_event.wait(interval)
+
+        thread = threading.Thread(target=sample_loop, daemon=True)
+        thread.start()
+        return stop_event, thread, path
+
+    def _stop_task_diagnostic_sampler(self, stop_event: threading.Event, thread: threading.Thread) -> None:
+        stop_event.set()
+        thread.join(timeout=2)
+
     def _cancel_remaining_tasks(self, run: dict[str, Any], *, message: str) -> None:
         for task in run["tasks"]:
             if task.get("status") in FINAL_TASK_STATUSES:
@@ -760,11 +1002,12 @@ class QueueRunner:
 
                 try:
                     workflow = copy.deepcopy(compiled_workflow)
+                    paths_by_kind = self._resolve_input_paths(batch_dir, task)
                     media_values = self._upload_media_values(
                         session=session,
                         base_url=base_url,
                         run_settings=run_settings,
-                        paths_by_kind=self._resolve_input_paths(batch_dir, task),
+                        paths_by_kind=paths_by_kind,
                     )
                     self._apply_profile_values(
                         workflow=workflow,
@@ -772,6 +1015,24 @@ class QueueRunner:
                         task=task,
                         run_settings=run_settings,
                         media_values=media_values,
+                    )
+                    preflight_path = self._write_task_preflight_diagnostics(
+                        run_dir=run_dir,
+                        project=project,
+                        profile=profile,
+                        batch=batch,
+                        run=run,
+                        task=task,
+                        run_settings=run_settings,
+                        workflow=workflow,
+                        bindings=bindings,
+                        paths_by_kind=paths_by_kind,
+                        media_values=media_values,
+                    )
+                    task.setdefault("diagnostics", {})["preflight"] = to_relative_string(run_dir, preflight_path)
+                    self._append_log(
+                        run,
+                        f"[DIAG] task={task['order']} preflight={task['diagnostics']['preflight']}",
                     )
                     prompt_id = legacy_batch.submit_prompt(session, base_url, workflow)
                     task["prompt_id"] = prompt_id
@@ -793,6 +1054,17 @@ class QueueRunner:
                 prompt_id = str(task.get("prompt_id", "")).strip()
                 task["status"] = "running"
                 self._mark_task_started(task)
+                sampler_stop, sampler_thread, sampler_path = self._start_task_diagnostic_sampler(
+                    run_dir=run_dir,
+                    run=run,
+                    task=task,
+                    interval_seconds=float(run_settings.get("poll_interval_seconds", 5)),
+                )
+                task.setdefault("diagnostics", {})["samples"] = to_relative_string(run_dir, sampler_path)
+                self._append_log(
+                    run,
+                    f"[DIAG] task={task['order']} samples={task['diagnostics']['samples']}",
+                )
                 self.store.save_run(run)
 
                 cached_record = task.pop("recovered_record", None)
@@ -843,6 +1115,8 @@ class QueueRunner:
                         f"[FAIL] task={task['order']} prompt_id={prompt_id} wait error={exc}",
                     )
                     self.store.save_run(run)
+                finally:
+                    self._stop_task_diagnostic_sampler(sampler_stop, sampler_thread)
 
                 cooldown_seconds = float(run_settings.get("task_cooldown_seconds", 10) or 0)
                 if cooldown_seconds > 0 and not run.get("stop_requested"):
