@@ -519,6 +519,13 @@ def update_settings(payload: dict[str, Any]) -> dict[str, Any]:
             payload.get("comfyui_output_dir", current_project.get("comfyui", {}).get("output_dir", ""))
         ).strip()
         save_prefix_root = normalize_comfyui_save_subfolder(payload.get("save_prefix_root"))
+
+        def int_setting(name: str, default: int) -> int:
+            value = payload.get(name)
+            if value is None or value == "":
+                return default
+            return int(value)
+
         project = store.update_project_settings(
             project_id,
             comfyui_base_url=str(payload.get("comfyui_base_url", "http://127.0.0.1:8189")),
@@ -530,6 +537,9 @@ def update_settings(payload: dict[str, Any]) -> dict[str, Any]:
                 "width_pixels": payload.get("width_pixels"),
                 "height_pixels": payload.get("height_pixels"),
                 "duration_seconds": payload.get("duration_seconds"),
+                "maintenance_interval_tasks": int_setting("maintenance_interval_tasks", 5),
+                "maintenance_cooldown_seconds": int_setting("maintenance_cooldown_seconds", 20),
+                "maintenance_memory_mode": str(payload.get("maintenance_memory_mode") or "free_memory"),
                 "seed_mode": str(payload.get("seed_mode", "fixed")),
                 "seed_fixed": int(payload.get("seed_fixed") or 1),
                 "seed_base": int(payload.get("seed_fixed") or 1),

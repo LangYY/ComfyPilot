@@ -536,6 +536,62 @@ class QueueRunner:
                 )
         return bindings
 
+    def _free_comfyui_memory(
+        self,
+        session: requests.Session,
+        base_url: str,
+        *,
+        unload_models: bool = False,
+        free_memory: bool = True,
+    ) -> str:
+        response = session.post(
+            f"{base_url.rstrip('/')}/free",
+            json={"unload_models": unload_models, "free_memory": free_memory},
+            timeout=30,
+        )
+        if response.status_code >= 400:
+            raise RuntimeError(f"ComfyUI /free failed ({response.status_code}): {response.text}")
+        return response.text.strip()
+
+    def _perform_maintenance_if_needed(
+        self,
+        run: dict[str, Any],
+        session: requests.Session,
+        base_url: str,
+        run_settings: dict[str, Any],
+        completed_count: int,
+    ) -> bool:
+        interval = int(run_settings.get("maintenance_interval_tasks") or 0)
+        if interval <= 0 or completed_count <= 0 or completed_count % interval != 0:
+            return False
+        if run.get("stop_requested"):
+            return False
+
+        mode = str(run_settings.get("maintenance_memory_mode") or "free_memory").strip().lower()
+        unload_models = mode in {"unload_models", "unload", "full"}
+        free_memory = mode in {"free_memory", "unload_models", "unload", "full", "light"}
+        if free_memory:
+            try:
+                result_text = self._free_comfyui_memory(
+                    session=session,
+                    base_url=base_url,
+                    unload_models=unload_models,
+                    free_memory=True,
+                )
+                self._append_log(
+                    run,
+                    f"[MAINT] task_count={completed_count} free_memory=true unload_models={str(unload_models).lower()} result={result_text or 'ok'}",
+                )
+            except Exception as exc:
+                self._append_log(run, f"[MAINT] ComfyUI memory release failed: {exc}")
+
+        cooldown_seconds = float(run_settings.get("maintenance_cooldown_seconds") or 0)
+        if cooldown_seconds > 0 and not run.get("stop_requested"):
+            self._append_log(run, f"[MAINT] Cooling down {cooldown_seconds:g}s after {completed_count} completed tasks.")
+            self.store.save_run(run)
+            time.sleep(cooldown_seconds)
+        return True
+
     def _command_text(self, command: list[str], *, timeout: int = 10) -> tuple[bool, str]:
         try:
             completed = subprocess.run(
@@ -1069,6 +1125,7 @@ class QueueRunner:
                 prompt_id = str(task.get("prompt_id", "")).strip()
                 task["status"] = "running"
                 self._mark_task_started(task)
+                maintenance_performed = False
                 sampler_stop, sampler_thread, sampler_path = self._start_task_diagnostic_sampler(
                     run_dir=run_dir,
                     run=run,
@@ -1115,6 +1172,14 @@ class QueueRunner:
                         f"[DONE] task={task['order']} prompt_id={prompt_id} output={final_path or saved_path}",
                     )
                     self.store.save_run(run)
+                    completed_count = sum(1 for item in run["tasks"] if item.get("status") == "completed")
+                    maintenance_performed = self._perform_maintenance_if_needed(
+                        run=run,
+                        session=session,
+                        base_url=base_url,
+                        run_settings=run_settings,
+                        completed_count=completed_count,
+                    )
                 except legacy_batch.BatchCancelled:
                     run["stop_requested"] = True
                     self._cancel_remaining_tasks(run, message="Stopped by user.")
@@ -1135,7 +1200,7 @@ class QueueRunner:
                     self._stop_task_diagnostic_sampler(sampler_stop, sampler_thread)
 
                 cooldown_seconds = float(run_settings.get("task_cooldown_seconds", 10) or 0)
-                if cooldown_seconds > 0 and not run.get("stop_requested"):
+                if cooldown_seconds > 0 and not run.get("stop_requested") and not maintenance_performed:
                     self._append_log(run, f"[COOLDOWN] Waiting {cooldown_seconds:g}s before next task.")
                     self.store.save_run(run)
                     time.sleep(cooldown_seconds)

@@ -353,6 +353,9 @@ function runtimeOverrides() {
     width_pixels: parseOptionalInteger("#width-pixels"),
     height_pixels: parseOptionalInteger("#height-pixels"),
     duration_seconds: parseOptionalInteger("#duration-seconds"),
+    maintenance_interval_tasks: parseOptionalInteger("#maintenance-interval-tasks"),
+    maintenance_cooldown_seconds: parseOptionalInteger("#maintenance-cooldown-seconds"),
+    maintenance_memory_mode: "free_memory",
   };
 }
 
@@ -406,6 +409,8 @@ function hydrateSettings(projectDetail) {
   document.querySelector("#height-pixels").value = defaults.height_pixels || "720";
   document.querySelector("#duration-seconds").dataset.savedValue = defaults.duration_seconds || "";
   document.querySelector("#duration-seconds").value = defaults.duration_seconds || "";
+  document.querySelector("#maintenance-interval-tasks").value = defaults.maintenance_interval_tasks ?? 5;
+  document.querySelector("#maintenance-cooldown-seconds").value = defaults.maintenance_cooldown_seconds ?? 20;
   syncSizePreset();
   updateSeedFieldVisibility();
 }
