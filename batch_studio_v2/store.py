@@ -167,6 +167,7 @@ class StudioStore:
                 "final_output_dir": "",
                 "save_prefix_root": "batch_studio_v2",
                 "output_name_prefix": "",
+                "repeat_count": 1,
                 "width_pixels": None,
                 "height_pixels": None,
                 "duration_seconds": None,
@@ -390,7 +391,67 @@ class StudioStore:
         if seed_mode == "fixed":
             fixed_seed = int(runtime_settings.get("seed_fixed") or runtime_settings.get("seed_base") or 1)
             for task in tasks:
-                task["seed_value"] = fixed_seed
+                task["seed_value"] = self._seed_for_draw(fixed_seed, task)
+
+    def _repeat_count(self, runtime_settings: dict[str, Any]) -> int:
+        try:
+            repeat_count = int(runtime_settings.get("repeat_count") or 1)
+        except (TypeError, ValueError):
+            repeat_count = 1
+        return max(1, min(repeat_count, 20))
+
+    def _seed_for_draw(self, seed_value: int, task: dict[str, Any]) -> int:
+        draw_count = int(task.get("draw_count") or 1)
+        draw_index = int(task.get("draw_index") or 1)
+        if draw_count <= 1:
+            return int(seed_value)
+        return int(seed_value) + max(0, draw_index - 1)
+
+    def _output_name_for_draw(self, output_name: str, draw_index: int, draw_count: int) -> str:
+        if draw_count <= 1:
+            return output_name
+        name_path = Path(output_name)
+        suffix = name_path.suffix or ".mp4"
+        draw_name = f"{name_path.stem}_draw{draw_index:02d}{suffix}"
+        if str(name_path.parent) in {"", "."}:
+            return draw_name
+        return f"{name_path.parent.as_posix()}/{draw_name}"
+
+    def _clone_task(self, task: Any) -> Any:
+        return json.loads(json.dumps(task, ensure_ascii=False))
+
+    def _expand_tasks_for_repeats(
+        self,
+        base_tasks: list[dict[str, Any]],
+        runtime_settings: dict[str, Any],
+    ) -> list[dict[str, Any]]:
+        repeat_count = self._repeat_count(runtime_settings)
+        seed_mode = str(runtime_settings.get("seed_mode", "fixed")).strip().lower()
+        expanded: list[dict[str, Any]] = []
+        order = 1
+        for base_task in base_tasks:
+            source_task_id = str(base_task.get("source_task_id") or base_task.get("task_id") or make_id("task"))
+            for draw_index in range(1, repeat_count + 1):
+                task = self._clone_task(base_task)
+                if repeat_count > 1:
+                    task["task_id"] = make_id("task")
+                task["order"] = order
+                task["source_order"] = int(base_task.get("source_order") or base_task.get("order") or order)
+                task["source_task_id"] = source_task_id
+                task["draw_index"] = draw_index
+                task["draw_count"] = repeat_count
+                task["expected_output_name"] = self._output_name_for_draw(
+                    str(task.get("expected_output_name") or "output.mp4"),
+                    draw_index,
+                    repeat_count,
+                )
+                if seed_mode == "random":
+                    task["seed_value"] = random.randint(1, 2_147_483_647)
+                else:
+                    task["seed_value"] = self._seed_for_draw(int(task.get("seed_value") or 1), task)
+                expanded.append(task)
+                order += 1
+        return expanded
 
     def _merge_submission_runtime_settings(
         self,
@@ -431,6 +492,11 @@ class StudioStore:
                 if output_name_prefix:
                     name_path = Path(base_output_name)
                     expected_output_name = f"{output_name_prefix}{name_path.stem}{name_path.suffix}"
+                expected_output_name = self._output_name_for_draw(
+                    expected_output_name,
+                    int(task.get("draw_index") or 1),
+                    int(task.get("draw_count") or 1),
+                )
                 task["expected_output_name"] = expected_output_name
 
         if update_seeds:
@@ -439,6 +505,7 @@ class StudioStore:
                 entry = self._task_prompt_entry(task)
                 order = int(task.get("order") or 1)
                 task["seed_value"] = compute_seed(entry, order, seed_base)
+                task["seed_value"] = self._seed_for_draw(int(task["seed_value"]), task)
             self._apply_seed_policy(tasks, runtime_settings)
 
     def _write_uploaded_images(
@@ -484,6 +551,8 @@ class StudioStore:
             output_name_prefix=str(runtime_settings.get("output_name_prefix", "")),
         )
         self._apply_seed_policy(tasks, runtime_settings)
+        base_tasks = self._clone_task(tasks)
+        tasks = self._expand_tasks_for_repeats(base_tasks, runtime_settings)
 
         manifest = {
             "id": draft_id,
@@ -498,8 +567,10 @@ class StudioStore:
                 "prompts_json": to_relative_string(draft_dir, prompts_path),
             },
             "split_config": None,
+            "base_tasks": base_tasks,
             "tasks": tasks,
             "task_count": len(tasks),
+            "source_task_count": len(base_tasks),
         }
         save_json(self._draft_manifest_path(project_id, draft_id), manifest)
         return manifest
@@ -570,6 +641,8 @@ class StudioStore:
                 f"Storyboard split produced {len(cells)} cells but prompts expanded to {len(tasks)} tasks. "
                 "For storyboard-grid drafts the counts must match."
             )
+        base_tasks = self._clone_task(tasks)
+        tasks = self._expand_tasks_for_repeats(base_tasks, runtime_settings)
 
         manifest = {
             "id": draft_id,
@@ -592,8 +665,10 @@ class StudioStore:
                 "cell_count": len(cells),
                 "grid_cell_count": total_cells,
             },
+            "base_tasks": base_tasks,
             "tasks": tasks,
             "task_count": len(tasks),
+            "source_task_count": len(base_tasks),
         }
         save_json(self._draft_manifest_path(project_id, draft_id), manifest)
         return manifest
@@ -646,6 +721,8 @@ class StudioStore:
                 f"Uploaded {len(images)} first-frame image(s) but prompts expanded to {len(tasks)} task(s). "
                 "For first-frame batch drafts the counts must match."
             )
+        base_tasks = self._clone_task(tasks)
+        tasks = self._expand_tasks_for_repeats(base_tasks, runtime_settings)
 
         manifest = {
             "id": draft_id,
@@ -660,8 +737,10 @@ class StudioStore:
                 "prompts_json": to_relative_string(draft_dir, prompts_path),
             },
             "split_config": None,
+            "base_tasks": base_tasks,
             "tasks": tasks,
             "task_count": len(tasks),
+            "source_task_count": len(base_tasks),
         }
         save_json(self._draft_manifest_path(project_id, draft_id), manifest)
         return manifest
@@ -733,6 +812,8 @@ class StudioStore:
                 f"Built {len(pairs)} first/last-frame pair(s) but prompts expanded to {len(tasks)} task(s). "
                 "The counts must match."
             )
+        base_tasks = self._clone_task(tasks)
+        tasks = self._expand_tasks_for_repeats(base_tasks, runtime_settings)
 
         manifest = {
             "id": draft_id,
@@ -749,8 +830,10 @@ class StudioStore:
             "split_config": {
                 "continuous_pairs": bool(continuous_pairs),
             },
+            "base_tasks": base_tasks,
             "tasks": tasks,
             "task_count": len(tasks),
+            "source_task_count": len(base_tasks),
         }
         save_json(self._draft_manifest_path(project_id, draft_id), manifest)
         return manifest
@@ -776,11 +859,29 @@ class StudioStore:
             copy_tree(draft_dir / "source", batch_dir / "source")
 
         runtime_settings = self._merge_submission_runtime_settings(draft["runtime_settings"], runtime_overrides)
-        tasks = self._selected_tasks(draft["tasks"], selected_task_ids)
+        selected_tasks = self._selected_tasks(draft["tasks"], selected_task_ids)
         previous_runtime = dict(draft.get("runtime_settings", {}))
         seed_keys = ("seed_mode", "seed_fixed", "seed_base")
         update_seeds = any(previous_runtime.get(key) != runtime_settings.get(key) for key in seed_keys)
-        self._refresh_task_runtime_fields(tasks, runtime_settings, update_seeds=update_seeds)
+        previous_repeat_count = self._repeat_count(previous_runtime)
+        repeat_count = self._repeat_count(runtime_settings)
+        if repeat_count != previous_repeat_count and draft.get("base_tasks"):
+            selected_source_ids = {
+                str(task.get("source_task_id") or task.get("task_id"))
+                for task in selected_tasks
+            }
+            selected_base_tasks = [
+                self._clone_task(task)
+                for task in draft["base_tasks"]
+                if str(task.get("source_task_id") or task.get("task_id")) in selected_source_ids
+            ]
+            if not selected_base_tasks:
+                selected_base_tasks = [self._clone_task(task) for task in draft["base_tasks"]]
+            self._refresh_task_runtime_fields(selected_base_tasks, runtime_settings, update_seeds=update_seeds)
+            tasks = self._expand_tasks_for_repeats(selected_base_tasks, runtime_settings)
+        else:
+            tasks = selected_tasks
+            self._refresh_task_runtime_fields(tasks, runtime_settings, update_seeds=update_seeds)
         manifest = {
             "id": batch_id,
             "project_id": project_id,
@@ -795,7 +896,7 @@ class StudioStore:
             "runtime_settings": runtime_settings,
             "tasks": tasks,
             "task_count": len(tasks),
-            "source_task_count": int(draft["task_count"]),
+            "source_task_count": int(draft.get("source_task_count") or draft["task_count"]),
             "selected_task_ids": selected_task_ids or [],
         }
         save_json(self._batch_manifest_path(project_id, batch_id), manifest)

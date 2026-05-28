@@ -534,6 +534,7 @@ def update_settings(payload: dict[str, Any]) -> dict[str, Any]:
                 "final_output_dir": final_output_dir,
                 "save_prefix_root": save_prefix_root,
                 "output_name_prefix": str(payload.get("output_name_prefix", "")),
+                "repeat_count": int_setting("repeat_count", 1),
                 "width_pixels": payload.get("width_pixels"),
                 "height_pixels": payload.get("height_pixels"),
                 "duration_seconds": payload.get("duration_seconds"),

@@ -8,7 +8,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&family=Plus+Jakarta+Sans:wght@600;700;800&display=swap" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@200..700,0..1&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/assets-v2/styles.css?v=20260527-maintenance">
+    <link rel="stylesheet" href="/assets-v2/styles.css?v=20260528-repeat">
   </head>
   <body data-active-tab="submit">
     <header class="topbar">
@@ -143,6 +143,10 @@
                       <select id="duration-seconds">
                         <option value="5">5s</option>
                       </select>
+                    </label>
+                    <label>
+                      <span>生成遍数</span>
+                      <input id="repeat-count" type="number" min="1" max="20" value="1">
                     </label>
                     <label>
                       <span>seed模式</span>
@@ -457,6 +461,6 @@
       </section>
     </div>
 
-    <script src="/assets-v2/app.js?v=20260526-seed-slot"></script>
+    <script src="/assets-v2/app.js?v=20260528-repeat"></script>
   </body>
 </html>

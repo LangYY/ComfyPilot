@@ -350,6 +350,7 @@ function runtimeOverrides() {
     seed_base: fixedSeed,
     save_prefix_root: normalizeSaveSubfolder(document.querySelector("#comfyui-output-dir").value),
     output_name_prefix: document.querySelector("#output-name-prefix").value.trim(),
+    repeat_count: parseOptionalInteger("#repeat-count") || 1,
     width_pixels: parseOptionalInteger("#width-pixels"),
     height_pixels: parseOptionalInteger("#height-pixels"),
     duration_seconds: parseOptionalInteger("#duration-seconds"),
@@ -405,6 +406,7 @@ function hydrateSettings(projectDetail) {
   document.querySelector("#output-name-prefix").value = defaults.output_name_prefix || "";
   document.querySelector("#seed-mode").value = defaults.seed_mode || "random";
   document.querySelector("#seed-fixed").value = defaults.seed_fixed || defaults.seed_base || 1;
+  document.querySelector("#repeat-count").value = defaults.repeat_count || 1;
   document.querySelector("#width-pixels").value = defaults.width_pixels || "1280";
   document.querySelector("#height-pixels").value = defaults.height_pixels || "720";
   document.querySelector("#duration-seconds").dataset.savedValue = defaults.duration_seconds || "";
@@ -847,10 +849,11 @@ function renderDraftPreview(draft) {
   status.textContent = `${draft.task_count} 个任务`;
   status.className = "status-pill queued";
   body.innerHTML = draft.tasks.map((task) => {
+    const drawText = Number(task.draw_count || 1) > 1 ? `<small class="draw-tag">第 ${escapeHtml(task.draw_index)} / ${escapeHtml(task.draw_count)} 遍</small>` : "";
     return `
       <tr>
         <td><input class="draft-task-checkbox" type="checkbox" value="${escapeHtml(task.task_id)}" checked></td>
-        <td>${escapeHtml(task.order)}</td>
+        <td>${escapeHtml(task.order)}${drawText}</td>
         <td>${escapeHtml(task.seed_value)}</td>
         <td>${escapeHtml(task.expected_output_name)}</td>
         <td>${renderInputRefs(task.input_urls || [])}</td>

@@ -484,7 +484,7 @@ textarea:focus {
 }
 
 .runtime-row-secondary {
-  grid-template-columns: 1fr 0.68fr 0.68fr 0.72fr 0.82fr 0.72fr;
+  grid-template-columns: 0.9fr 0.56fr 0.56fr 0.62fr 0.62fr 0.78fr 0.68fr;
 }
 
 .seed-fixed-slot.seed-placeholder {
@@ -569,6 +569,16 @@ textarea:focus {
   font-size: 11px;
   line-height: 1.5;
   white-space: pre-wrap;
+}
+
+.draw-tag {
+  display: block;
+  margin-top: 4px;
+  color: var(--primary);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
 }
 
 .mini-grid {
