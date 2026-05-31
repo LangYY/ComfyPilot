@@ -489,13 +489,19 @@ class QueueRunner:
 
         width_value = run_settings.get("width_pixels")
         if width_value not in (None, ""):
-            for binding in runtime_field_bindings.get("width_pixels", []):
+            width_bindings = runtime_field_bindings.get("width_pixels", [])
+            if not width_bindings:
+                width_bindings = self._detect_dimension_bindings(workflow, "width")
+            for binding in width_bindings:
                 width_node = legacy_batch.ensure_node(workflow, binding, "output width")
                 width_node.setdefault("inputs", {})[binding["input_name"]] = int(width_value)
 
         height_value = run_settings.get("height_pixels")
         if height_value not in (None, ""):
-            for binding in runtime_field_bindings.get("height_pixels", []):
+            height_bindings = runtime_field_bindings.get("height_pixels", [])
+            if not height_bindings:
+                height_bindings = self._detect_dimension_bindings(workflow, "height")
+            for binding in height_bindings:
                 height_node = legacy_batch.ensure_node(workflow, binding, "output height")
                 height_node.setdefault("inputs", {})[binding["input_name"]] = int(height_value)
 
@@ -542,6 +548,39 @@ class QueueRunner:
                         "current_value": value,
                         "class_type": str(node.get("class_type", "")),
                         "title": legacy_batch.node_title(node),
+                    }
+                )
+        return bindings
+
+    def _detect_dimension_bindings(self, workflow: dict[str, dict[str, Any]], dimension: str) -> list[dict[str, Any]]:
+        if dimension == "width":
+            aliases = {"width", "resize_type.width"}
+            title_aliases = ("width", "宽度", "宽")
+            label = "output width"
+        else:
+            aliases = {"height", "resize_type.height"}
+            title_aliases = ("height", "高度", "高")
+            label = "output height"
+
+        bindings: list[dict[str, Any]] = []
+        for node_id, node in workflow.items():
+            inputs = node.get("inputs", {})
+            title_blob = f"{legacy_batch.node_title(node)} {node_id} {node.get('class_type', '')}".lower()
+            for input_name, value in inputs.items():
+                input_key = str(input_name).lower()
+                input_matches = input_key in aliases
+                title_matches = input_key == "value" and any(alias in title_blob for alias in title_aliases)
+                if not input_matches and not title_matches:
+                    continue
+                if not isinstance(value, (int, float)):
+                    continue
+                bindings.append(
+                    {
+                        "id": str(node_id),
+                        "input_name": str(input_name),
+                        "current_value": value,
+                        "class_type": str(node.get("class_type", "")),
+                        "title": legacy_batch.node_title(node) or label,
                     }
                 )
         return bindings

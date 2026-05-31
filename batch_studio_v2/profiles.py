@@ -306,8 +306,16 @@ def inspect_workflow_profile(
         compiled_template,
         list(node_hint.get("seed_nodes", [])),
     )
-    width_bindings = _runtime_field_candidates(compiled_template, ("width", "resize_type.width"))
-    height_bindings = _runtime_field_candidates(compiled_template, ("height", "resize_type.height"))
+    width_bindings = _runtime_field_candidates(
+        compiled_template,
+        ("width", "resize_type.width"),
+        ("width", "宽度", "宽"),
+    )
+    height_bindings = _runtime_field_candidates(
+        compiled_template,
+        ("height", "resize_type.height"),
+        ("height", "高度", "高"),
+    )
     duration_bindings = _runtime_field_candidates(
         compiled_template,
         ("duration", "duration_seconds", "seconds", "length", "video_length", "num_seconds"),
