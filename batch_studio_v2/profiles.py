@@ -232,6 +232,32 @@ def _runtime_field_candidates(
     return detected
 
 
+def _boolean_switch_candidates(
+    workflow: dict[str, dict[str, Any]],
+    title_aliases: tuple[str, ...],
+) -> list[dict[str, Any]]:
+    detected: list[dict[str, Any]] = []
+    title_alias_set = {alias.lower() for alias in title_aliases}
+    for node_id, node in workflow.items():
+        inputs = node.get("inputs", {})
+        title_blob = f"{legacy_batch.node_title(node)} {node_id} {node.get('class_type', '')}".lower()
+        if not any(alias in title_blob for alias in title_alias_set):
+            continue
+        for input_name, value in inputs.items():
+            if not isinstance(value, bool):
+                continue
+            detected.append(
+                {
+                    "id": node_id,
+                    "input_name": input_name,
+                    "current_value": value,
+                    "class_type": str(node.get("class_type", "")),
+                    "title": legacy_batch.node_title(node),
+                }
+            )
+    return detected
+
+
 def _duration_options(default_value: Any) -> list[int]:
     values = {3, 5, 8, 10, 15, 20, 30}
     try:
@@ -286,6 +312,10 @@ def inspect_workflow_profile(
         compiled_template,
         ("duration", "duration_seconds", "seconds", "length", "video_length", "num_seconds"),
         ("duration", "time", "seconds", "时长", "秒"),
+    )
+    text_to_video_switches = _boolean_switch_candidates(
+        compiled_template,
+        ("text to video", "text-to-video", "text2video", "t2v", "文生视频", "文本到视频"),
     )
 
     runtime_schema = [
@@ -397,6 +427,7 @@ def inspect_workflow_profile(
                 "width_pixels": deep_copy_jsonable(width_bindings),
                 "height_pixels": deep_copy_jsonable(height_bindings),
                 "duration_seconds": deep_copy_jsonable(duration_bindings),
+                "text_to_video_enabled": deep_copy_jsonable(text_to_video_switches),
             },
         },
         "runtime_schema": runtime_schema,
@@ -418,6 +449,7 @@ def inspect_workflow_profile(
             "compiled_from_ui_workflow": isinstance(workflow_data, dict) and isinstance(workflow_data.get("nodes"), list),
             "compiled_node_count": len(compiled_template),
             "duration_options_seconds": _duration_options(duration_bindings[0]["current_value"]) if duration_bindings else [],
+            "text_to_video_switches": deep_copy_jsonable(text_to_video_switches),
         },
     }
     return profile_manifest, deep_copy_jsonable(compiled_template)

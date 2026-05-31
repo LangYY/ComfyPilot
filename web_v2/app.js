@@ -341,10 +341,10 @@ async function updatePromptFileInfo() {
   renderUploadChecklist();
 }
 
-function runtimeOverrides() {
+function runtimeOverrides(options = {}) {
   const seedMode = document.querySelector("#seed-mode").value;
   const fixedSeed = Number(document.querySelector("#seed-fixed").value || "1");
-  return {
+  const overrides = {
     seed_mode: seedMode,
     seed_fixed: fixedSeed,
     seed_base: fixedSeed,
@@ -358,6 +358,10 @@ function runtimeOverrides() {
     maintenance_cooldown_seconds: parseOptionalInteger("#maintenance-cooldown-seconds"),
     maintenance_memory_mode: "free_memory",
   };
+  if (options.includeDraftMode) {
+    overrides.draft_mode = document.querySelector("#draft-mode").value || "t2v";
+  }
+  return overrides;
 }
 
 function settingsPayload() {
@@ -1448,7 +1452,7 @@ async function handleDraftCreate(event) {
 
   const form = new FormData();
   form.append("profile_id", profileId);
-  form.append("runtime_overrides_json", JSON.stringify(runtimeOverrides()));
+  form.append("runtime_overrides_json", JSON.stringify(runtimeOverrides({ includeDraftMode: true })));
   await readPromptsInput(form);
 
   const mode = document.querySelector("#draft-mode").value;

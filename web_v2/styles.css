@@ -412,6 +412,13 @@ textarea:focus {
   align-self: end;
 }
 
+.workflow-upload-details[open] {
+  grid-column: 1 / -1;
+  display: grid;
+  gap: 12px;
+  align-self: stretch;
+}
+
 .workflow-upload-details > summary {
   display: inline-flex;
   align-items: center;
@@ -433,16 +440,14 @@ textarea:focus {
 }
 
 .workflow-upload-details[open] > summary {
+  justify-self: end;
   border-color: rgba(149, 212, 179, 0.52);
   background: rgba(149, 212, 179, 0.08);
 }
 
 .workflow-upload-details > form {
-  position: absolute;
-  right: 0;
-  z-index: 20;
-  width: min(520px, calc(100vw - 72px));
-  margin-top: 12px;
+  width: 100%;
+  margin-top: 0;
   padding: 16px;
   border: 1px solid rgba(149, 212, 179, 0.18);
   border-radius: var(--radius);
@@ -1674,7 +1679,6 @@ button[data-batch-action] {
   }
 
   .workflow-upload-details > form {
-    position: static;
     width: 100%;
   }
 

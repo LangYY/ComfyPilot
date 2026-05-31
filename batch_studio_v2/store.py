@@ -545,6 +545,7 @@ class StudioStore:
 
         runtime_settings = merge_run_settings(project["default_run_settings"], profile.get("defaults", {}))
         runtime_settings = merge_run_settings(runtime_settings, runtime_overrides)
+        runtime_settings["draft_mode"] = "t2v"
         tasks = parse_prompt_payload(
             self._normalize_prompts_payload(prompts_text),
             seed_base=int(runtime_settings.get("seed_base", 1)),
@@ -628,6 +629,7 @@ class StudioStore:
 
         runtime_settings = merge_run_settings(project["default_run_settings"], profile.get("defaults", {}))
         runtime_settings = merge_run_settings(runtime_settings, runtime_overrides)
+        runtime_settings["draft_mode"] = "i2v_storyboard"
         tasks = parse_prompt_payload(
             self._normalize_prompts_payload(prompts_text),
             seed_base=int(runtime_settings.get("seed_base", 1)),
@@ -708,6 +710,7 @@ class StudioStore:
 
         runtime_settings = merge_run_settings(project["default_run_settings"], profile.get("defaults", {}))
         runtime_settings = merge_run_settings(runtime_settings, runtime_overrides)
+        runtime_settings["draft_mode"] = "i2v_first_batch"
         tasks = parse_prompt_payload(
             self._normalize_prompts_payload(prompts_text),
             seed_base=int(runtime_settings.get("seed_base", 1)),
@@ -799,6 +802,7 @@ class StudioStore:
 
         runtime_settings = merge_run_settings(project["default_run_settings"], profile.get("defaults", {}))
         runtime_settings = merge_run_settings(runtime_settings, runtime_overrides)
+        runtime_settings["draft_mode"] = "i2v_first_last_continuous" if continuous_pairs else "i2v_first_last_batch"
         tasks = parse_prompt_payload(
             self._normalize_prompts_payload(prompts_text),
             seed_base=int(runtime_settings.get("seed_base", 1)),

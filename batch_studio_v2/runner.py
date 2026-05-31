@@ -471,6 +471,16 @@ class QueueRunner:
         positive_node = legacy_batch.ensure_node(workflow, positive_prompt, "positive prompt")
         positive_node.setdefault("inputs", {})[positive_prompt["input_name"]] = task["prompt_text"]
 
+        draft_mode = str(run_settings.get("draft_mode") or "").strip().lower()
+        if draft_mode:
+            text_to_video_enabled = draft_mode in {"t2v", "text_to_video", "text-to-video", "prompt_only"}
+            t2v_switches = runtime_field_bindings.get("text_to_video_enabled", [])
+            if not t2v_switches:
+                t2v_switches = self._detect_text_to_video_switch_bindings(workflow)
+            for binding in t2v_switches:
+                switch_node = legacy_batch.ensure_node(workflow, binding, "text-to-video switch")
+                switch_node.setdefault("inputs", {})[binding["input_name"]] = bool(text_to_video_enabled)
+
         negative_prompt = bindings.get("negative_prompt")
         negative_text = str(run_settings.get("negative_prompt_text", "")).strip()
         if negative_prompt and negative_text:
@@ -524,6 +534,28 @@ class QueueRunner:
                 if not input_matches and not title_matches:
                     continue
                 if not isinstance(value, (int, float)):
+                    continue
+                bindings.append(
+                    {
+                        "id": str(node_id),
+                        "input_name": str(input_name),
+                        "current_value": value,
+                        "class_type": str(node.get("class_type", "")),
+                        "title": legacy_batch.node_title(node),
+                    }
+                )
+        return bindings
+
+    def _detect_text_to_video_switch_bindings(self, workflow: dict[str, dict[str, Any]]) -> list[dict[str, Any]]:
+        bindings: list[dict[str, Any]] = []
+        title_aliases = ("text to video", "text-to-video", "text2video", "t2v", "文生视频", "文本到视频")
+        for node_id, node in workflow.items():
+            inputs = node.get("inputs", {})
+            title_blob = f"{legacy_batch.node_title(node)} {node_id} {node.get('class_type', '')}".lower()
+            if not any(alias in title_blob for alias in title_aliases):
+                continue
+            for input_name, value in inputs.items():
+                if not isinstance(value, bool):
                     continue
                 bindings.append(
                     {
