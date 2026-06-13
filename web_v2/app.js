@@ -41,16 +41,10 @@ const PLANNED_BATCH_STATUSES = new Set(["planned", "scheduled"]);
 
 const PROMPT_JSON_EXAMPLE = [
   {
-    index: 1,
-    prompt: "Cinematic scene description, subject action, environment, camera movement and lighting.",
-    subtitle: "可选字幕，仅作为旁注，不会传给 ComfyUI",
-    output_name: "01_scene_name.mp4",
+    prompt: "第一条完整的视频画面提示词",
   },
   {
-    index: 2,
-    prompt: "The complete visual prompt for the second video clip.",
-    subtitle: "第二条可选字幕",
-    output_name: "02_scene_name.mp4",
+    prompt: "第二条完整的视频画面提示词",
   },
 ];
 
@@ -116,23 +110,8 @@ function toast(message) {
   window.alert(message);
 }
 
-function promptTemplateForAI() {
-  const info = modeInfo();
-  const mode = document.querySelector("#draft-mode").value || "t2v";
-  const taskCount = info.expectedTasks
-    ? `必须生成恰好 ${info.expectedTasks} 条对象，不能多也不能少。`
-    : "请按我的创作需求生成指定数量；如果我没有说明数量，先询问我需要几条。";
-  const modeInstruction = mode === "t2v"
-    ? "当前用于 T2V。每条 prompt 必须是可独立生成视频的完整视觉描述，包含主体、场景、动作、镜头运动、光线和风格。"
-    : mode === "i2v_first_last_batch" || mode === "i2v_first_last_continuous"
-      ? "当前用于首尾帧 I2V。每条 prompt 只描述从首帧到尾帧的动作变化、过程和镜头运动，不要要求生成图片。"
-      : "当前用于首帧 I2V。每条 prompt 重点描述已有首帧中的主体如何运动、环境如何变化以及镜头如何运动，不要要求生成图片。";
-
-  return `请根据我接下来提供的主题和创作要求，生成 ComfyPilot 可直接识别的视频 prompts JSON。\n\n严格规则：\n1. 只返回合法 JSON 数组，不要使用 Markdown 代码块，不要添加解释、标题或前后缀。\n2. ${taskCount}\n3. 每个对象必须包含：index、prompt、output_name。subtitle 可选。\n4. index 必须从 1 开始连续递增，必须是数字。\n5. prompt 必须是纯视频画面提示词，不要在里面写字幕、文件名、seed、尺寸、时长、保存路径或参数说明。\n6. subtitle 只写画外字幕文本；没有字幕时填空字符串。字幕不会传给 ComfyUI。\n7. output_name 必须唯一，使用两位序号开头并以 .mp4 结尾，例如 01_scene_name.mp4；不要包含目录、盘符或 \\/:*?\"<>| 等非法字符。\n8. 不要使用 prompt1、prompt2 等错误字段名，字段名必须准确写成 prompt。\n9. ${modeInstruction}\n10. 输出前自行检查 JSON 能被标准 JSON 解析器读取，不允许尾逗号、注释、中文引号或缺少方括号。\n\n格式范例：\n${JSON.stringify(PROMPT_JSON_EXAMPLE, null, 2)}\n\n我的主题与要求：\n[请在这里填写主题、风格、镜头数量或其他要求]`;
-}
-
 async function copyPromptTemplate() {
-  const text = promptTemplateForAI();
+  const text = JSON.stringify(PROMPT_JSON_EXAMPLE, null, 2);
   let copied = false;
   if (navigator.clipboard?.writeText) {
     try {
@@ -158,10 +137,10 @@ async function copyPromptTemplate() {
   }
   const status = document.querySelector("#prompt-template-copy-status");
   const button = document.querySelector("#copy-prompt-template-btn");
-  status.textContent = "已复制。直接粘贴给 AI，再补充你的主题和要求即可。";
+  status.textContent = "JSON 格式已复制。";
   button.textContent = "已复制";
   window.setTimeout(() => {
-    button.textContent = "复制 AI 格式范本";
+    button.textContent = "复制 JSON 格式";
   }, 1800);
 }
 
