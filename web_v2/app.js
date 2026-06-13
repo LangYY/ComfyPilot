@@ -74,6 +74,14 @@ const PROMPT_JSON_FORMATS = [
     ],
   },
   {
+    title: "单字段自由命名",
+    description: "对象只有一个非元数据文本字段时，会自动将它识别为 prompt。",
+    value: [
+      { gemini: "第一条完整的视频画面提示词" },
+      { claude: "第二条完整的视频画面提示词" },
+    ],
+  },
+  {
     title: "带可选信息的对象数组",
     description: "可附带序号、字幕和输出文件名；只有 prompt 会传给 ComfyUI。",
     value: [
@@ -364,12 +372,30 @@ function countPromptPayload(payload) {
   if (payload && typeof payload === "object" && Object.keys(payload).some(isPromptFieldName)) {
     return 1;
   }
+  if (payload && typeof payload === "object" && freeformPromptFields(payload).length === 1) {
+    return 1;
+  }
   return null;
 }
 
 function isPromptFieldName(key) {
   const normalized = String(key || "").trim().toLowerCase().replace(/[\s_-]+/g, "");
   return /^(prompt|text|visualprompt|videoprompt|positiveprompt)\d*$/.test(normalized);
+}
+
+function isPromptMetadataField(key) {
+  const normalized = String(key || "").trim().toLowerCase().replace(/[\s_-]+/g, "");
+  return new Set([
+    "index", "id", "title", "name", "subtitle", "outputname", "seed",
+    "duration", "durationseconds", "zodiac", "ballname", "floortheme",
+    "sfx", "sfxstyle", "bgm", "bgmmood",
+  ]).has(normalized);
+}
+
+function freeformPromptFields(payload) {
+  return Object.entries(payload || {}).filter(([key, value]) => {
+    return !isPromptFieldName(key) && !isPromptMetadataField(key) && typeof value === "string" && value.trim();
+  });
 }
 
 function stripLoosePromptPrefix(line) {

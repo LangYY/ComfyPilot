@@ -555,6 +555,42 @@ def _prompt_key_rank(key: Any) -> tuple[int, int, int] | None:
     return None
 
 
+def _normalized_prompt_key(key: Any) -> str:
+    return re.sub(r"[\s_-]+", "", str(key or "").strip().lower())
+
+
+def _is_prompt_metadata_key(key: Any) -> bool:
+    return _normalized_prompt_key(key) in {
+        "index",
+        "id",
+        "title",
+        "name",
+        "subtitle",
+        "outputname",
+        "seed",
+        "duration",
+        "durationseconds",
+        "zodiac",
+        "ballname",
+        "floortheme",
+        "sfx",
+        "sfxstyle",
+        "bgm",
+        "bgmmood",
+    }
+
+
+def _freeform_prompt_candidates(item: dict[str, Any]) -> list[tuple[str, str]]:
+    return [
+        (str(key), value.strip())
+        for key, value in item.items()
+        if _prompt_key_rank(key) is None
+        and not _is_prompt_metadata_key(key)
+        and isinstance(value, str)
+        and value.strip()
+    ]
+
+
 def _extract_prompt_text(item: dict[str, Any], position: int) -> tuple[str, str]:
     candidates: list[tuple[tuple[int, int, int], str, str]] = []
     for key, value in item.items():
@@ -564,9 +600,15 @@ def _extract_prompt_text(item: dict[str, Any], position: int) -> tuple[str, str]
             candidates.append((rank, str(key), text))
 
     if not candidates:
+        freeform_candidates = _freeform_prompt_candidates(item)
+        if len(freeform_candidates) == 1:
+            return freeform_candidates[0][1], freeform_candidates[0][0]
+        if len(freeform_candidates) > 1:
+            keys = ", ".join(candidate[0] for candidate in freeform_candidates)
+            raise ValueError(f"Prompt entry #{position} has ambiguous text fields: {keys}.")
         raise ValueError(
             f"Prompt entry #{position} is missing prompt text. "
-            "Use prompt/text, or a common variant such as prompt1, visual_prompt, or video_prompt."
+            "Use prompt/text, a common variant, or one clearly identifiable custom text field."
         )
 
     candidates.sort(key=lambda candidate: candidate[0])
@@ -582,7 +624,10 @@ def _extract_prompt_text(item: dict[str, Any], position: int) -> tuple[str, str]
 
 
 def _looks_like_prompt_object(data: Any) -> bool:
-    return isinstance(data, dict) and any(_prompt_key_rank(key) is not None for key in data)
+    return isinstance(data, dict) and (
+        any(_prompt_key_rank(key) is not None for key in data)
+        or bool(_freeform_prompt_candidates(data))
+    )
 
 
 def load_prompts(data: Any) -> list[dict[str, Any]]:
