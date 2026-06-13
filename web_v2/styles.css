@@ -640,7 +640,12 @@ textarea:focus {
 }
 
 .prompt-input-block {
+  display: grid;
   gap: 10px;
+}
+
+.prompt-input-label {
+  display: block;
 }
 
 .prompt-input-head {
@@ -648,6 +653,31 @@ textarea:focus {
   align-items: center;
   justify-content: space-between;
   gap: 14px;
+}
+
+.prompt-head-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.prompt-template-button {
+  min-height: 36px;
+  border: 1px solid rgba(149, 212, 179, 0.34);
+  border-radius: var(--radius-sm);
+  padding: 0 12px;
+  color: var(--surface-lowest);
+  background: var(--primary);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+}
+
+.prompt-template-button:hover:not(:disabled) {
+  color: var(--surface-lowest);
+  background: var(--primary-fixed);
 }
 
 .file-button {
@@ -672,6 +702,51 @@ textarea:focus {
   inset: 0;
   opacity: 0;
   cursor: pointer;
+}
+
+.prompt-template-help {
+  border: 1px solid rgba(149, 212, 179, 0.14);
+  border-radius: var(--radius-sm);
+  background: rgba(13, 15, 13, 0.3);
+}
+
+.prompt-template-help > summary {
+  padding: 10px 12px;
+  color: var(--primary);
+  font-size: 11px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.prompt-template-content {
+  display: grid;
+  gap: 10px;
+  padding: 0 12px 12px;
+}
+
+.prompt-template-content pre {
+  max-height: 280px;
+  overflow: auto;
+  margin: 0;
+  padding: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: var(--radius-sm);
+  color: var(--on-variant);
+  background: var(--surface-lowest);
+  font-size: 11px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+}
+
+.prompt-template-content p {
+  margin: 0;
+  color: var(--on-variant);
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.prompt-template-content code {
+  color: var(--primary);
 }
 
 .code-box,
@@ -1676,6 +1751,15 @@ button[data-batch-action] {
   .runtime-profile-box > small {
     grid-column: auto;
     grid-row: auto;
+  }
+
+  .prompt-input-head {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .prompt-head-actions {
+    justify-content: flex-start;
   }
 
   .workflow-upload-details > form {
