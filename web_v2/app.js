@@ -59,11 +59,18 @@ const PROMPT_JSON_FORMATS = [
     ],
   },
   {
-    title: "Text 别名对象数组",
-    description: "text 可以作为 prompt 的别名。",
+    title: "单个 Prompt 对象",
+    description: "只生成一个视频时也可以直接使用对象。",
+    value: { prompt: "一条完整的视频画面提示词" },
+  },
+  {
+    title: "常见 Prompt 字段变体",
+    description: "兼容 text、prompt1、Prompt_2、visual_prompt、video_prompt 和 positive_prompt。",
     value: [
       { text: "第一条完整的视频画面提示词" },
-      { text: "第二条完整的视频画面提示词" },
+      { prompt1: "第二条完整的视频画面提示词" },
+      { Prompt_2: "第三条完整的视频画面提示词" },
+      { video_prompt: "第四条完整的视频画面提示词" },
     ],
   },
   {
@@ -354,7 +361,15 @@ function countPromptPayload(payload) {
   if (payload && typeof payload === "object" && Array.isArray(payload.scenes)) {
     return payload.scenes.length;
   }
+  if (payload && typeof payload === "object" && Object.keys(payload).some(isPromptFieldName)) {
+    return 1;
+  }
   return null;
+}
+
+function isPromptFieldName(key) {
+  const normalized = String(key || "").trim().toLowerCase().replace(/[\s_-]+/g, "");
+  return /^(prompt|text|visualprompt|videoprompt|positiveprompt)\d*$/.test(normalized);
 }
 
 function stripLoosePromptPrefix(line) {

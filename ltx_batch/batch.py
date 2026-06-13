@@ -537,10 +537,60 @@ def normalize_workflow_template(
     )
 
 
+def _prompt_key_rank(key: Any) -> tuple[int, int, int] | None:
+    normalized = re.sub(r"[\s_-]+", "", str(key or "").strip().lower())
+    aliases = {
+        "prompt": 0,
+        "text": 1,
+        "visualprompt": 2,
+        "videoprompt": 3,
+        "positiveprompt": 4,
+    }
+    for alias, rank in aliases.items():
+        if normalized == alias:
+            return (0, rank, 0)
+        match = re.fullmatch(rf"{alias}(\d+)", normalized)
+        if match:
+            return (1, rank, int(match.group(1)))
+    return None
+
+
+def _extract_prompt_text(item: dict[str, Any], position: int) -> tuple[str, str]:
+    candidates: list[tuple[tuple[int, int, int], str, str]] = []
+    for key, value in item.items():
+        rank = _prompt_key_rank(key)
+        text = str(value or "").strip()
+        if rank is not None and text:
+            candidates.append((rank, str(key), text))
+
+    if not candidates:
+        raise ValueError(
+            f"Prompt entry #{position} is missing prompt text. "
+            "Use prompt/text, or a common variant such as prompt1, visual_prompt, or video_prompt."
+        )
+
+    candidates.sort(key=lambda candidate: candidate[0])
+    exact_candidates = [candidate for candidate in candidates if candidate[0][0] == 0]
+    if exact_candidates:
+        candidates = exact_candidates
+        candidates.sort(key=lambda candidate: candidate[0])
+    elif len(candidates) > 1:
+        keys = ", ".join(candidate[1] for candidate in candidates)
+        raise ValueError(f"Prompt entry #{position} has ambiguous prompt fields: {keys}.")
+    _rank, source_key, prompt_text = candidates[0]
+    return prompt_text, source_key
+
+
+def _looks_like_prompt_object(data: Any) -> bool:
+    return isinstance(data, dict) and any(_prompt_key_rank(key) is not None for key in data)
+
+
 def load_prompts(data: Any) -> list[dict[str, Any]]:
     prompts: list[Any]
     if isinstance(data, list):
         prompts = data
+    elif _looks_like_prompt_object(data):
+        prompts = [data]
     elif isinstance(data, dict) and isinstance(data.get("items"), list):
         prompts = data["items"]
     elif isinstance(data, dict) and isinstance(data.get("scenes"), list):
@@ -554,13 +604,16 @@ def load_prompts(data: Any) -> list[dict[str, Any]]:
             else:
                 raise ValueError("Each scene entry in prompts.json must be a string or object.")
 
-            visual_prompt = str(
-                item.get("prompt") or item.get("visual_prompt") or item.get("text") or ""
-            ).strip()
+            if _looks_like_prompt_object(item):
+                visual_prompt, source_key = _extract_prompt_text(item, len(prompts) + 1)
+            else:
+                visual_prompt, source_key = "", ""
             if master_prompt and visual_prompt:
                 item["prompt"] = f"{master_prompt}\n\nScene prompt:\n{visual_prompt}"
             else:
                 item["prompt"] = visual_prompt or master_prompt
+            if source_key and source_key != "prompt":
+                item.pop(source_key, None)
             item["output_name"] = item.get("output_name") or ""
             prompts.append(item)
     else:
@@ -577,16 +630,13 @@ def load_prompts(data: Any) -> list[dict[str, Any]]:
         else:
             raise ValueError("Each prompt entry in prompts.json must be a string or object.")
 
-        prompt_text = str(item.get("prompt") or item.get("text") or "").strip()
-        if not prompt_text:
-            raise ValueError(
-                f"Prompt entry #{position} is missing prompt text. "
-                "Use either a string item or an object with a prompt field."
-            )
+        prompt_text, source_key = _extract_prompt_text(item, position)
 
         raw_index = item.get("index")
         item["index"] = position if raw_index in (None, "") else int(raw_index)
         item["prompt"] = prompt_text
+        if source_key != "prompt":
+            item.pop(source_key, None)
         normalized.append(item)
     return sorted(normalized, key=lambda item: item["index"])
 
