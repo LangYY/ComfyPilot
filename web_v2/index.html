@@ -8,7 +8,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&family=Plus+Jakarta+Sans:wght@600;700;800&display=swap" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@200..700,0..1&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/assets-v2/styles.css?v=20260613-simple-prompt-template">
+    <link rel="stylesheet" href="/assets-v2/styles.css?v=20260613-json-formats-modal">
   </head>
   <body data-active-tab="submit">
     <header class="topbar">
@@ -205,7 +205,7 @@
                   <div class="prompt-input-head">
                     <label for="prompts-text" class="prompt-input-label">Positive Prompts JSON</label>
                     <span class="prompt-head-actions">
-                      <button id="copy-prompt-template-btn" type="button" class="prompt-template-button">复制 JSON 格式</button>
+                      <button id="view-prompt-formats-btn" type="button" class="prompt-template-button">查看 JSON 格式</button>
                       <span class="file-button">
                         上传 prompts
                         <input id="prompts-file" type="file" accept=".json,.txt,text/plain,application/json">
@@ -214,7 +214,6 @@
                   </div>
                   <textarea id="prompts-text" class="code-box prompt-box" spellcheck="false" placeholder='支持 JSON 数组/对象，也支持单条 prompt 或每行一条：&#10;镜头1 prompt&#10;镜头2 prompt'></textarea>
                 </div>
-                <span id="prompt-template-copy-status" class="hint" aria-live="polite"></span>
                 <span id="prompts-input-status" class="hint">必需：粘贴 JSON、单条 prompt，或每行一条 prompt。</span>
 
                 <div id="storyboard-fields" class="mode-fields stack hidden">
@@ -465,6 +464,22 @@
       </section>
     </div>
 
-    <script src="/assets-v2/app.js?v=20260613-simple-prompt-template"></script>
+    <div id="prompt-formats-modal" class="prompt-formats-modal hidden" role="dialog" aria-modal="true" aria-labelledby="prompt-formats-title">
+      <div class="prompt-formats-backdrop" data-prompt-formats-close></div>
+      <section class="prompt-formats-shell">
+        <header>
+          <div>
+            <strong id="prompt-formats-title">工作台支持的 JSON 格式</strong>
+            <p>以下格式都可以直接粘贴到 Positive Prompts JSON。</p>
+          </div>
+          <button type="button" class="icon-button" data-prompt-formats-close title="关闭">
+            <span class="material-symbols-outlined">close</span>
+          </button>
+        </header>
+        <div id="prompt-formats-list" class="prompt-formats-list"></div>
+      </section>
+    </div>
+
+    <script src="/assets-v2/app.js?v=20260613-json-formats-modal"></script>
   </body>
 </html>

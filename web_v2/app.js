@@ -39,12 +39,70 @@ const TASK_STATUS_LABELS = {
 const ACTIVE_RUN_STATUSES = new Set(["queued", "running", "stopping"]);
 const PLANNED_BATCH_STATUSES = new Set(["planned", "scheduled"]);
 
-const PROMPT_JSON_EXAMPLE = [
+const PROMPT_JSON_FORMATS = [
   {
-    prompt: "第一条完整的视频画面提示词",
+    title: "单条 JSON 字符串",
+    description: "只生成一个视频时可用。",
+    value: "一条完整的视频画面提示词",
   },
   {
-    prompt: "第二条完整的视频画面提示词",
+    title: "字符串数组",
+    description: "最简批量格式，每个字符串是一条任务。",
+    value: ["第一条完整的视频画面提示词", "第二条完整的视频画面提示词"],
+  },
+  {
+    title: "Prompt 对象数组",
+    description: "推荐格式，只需要 prompt 字段。",
+    value: [
+      { prompt: "第一条完整的视频画面提示词" },
+      { prompt: "第二条完整的视频画面提示词" },
+    ],
+  },
+  {
+    title: "Text 别名对象数组",
+    description: "text 可以作为 prompt 的别名。",
+    value: [
+      { text: "第一条完整的视频画面提示词" },
+      { text: "第二条完整的视频画面提示词" },
+    ],
+  },
+  {
+    title: "带可选信息的对象数组",
+    description: "可附带序号、字幕和输出文件名；只有 prompt 会传给 ComfyUI。",
+    value: [
+      { index: 1, prompt: "第一条完整的视频画面提示词", subtitle: "第一条字幕", output_name: "01_scene.mp4" },
+      { index: 2, prompt: "第二条完整的视频画面提示词", subtitle: "第二条字幕", output_name: "02_scene.mp4" },
+    ],
+  },
+  {
+    title: "Items 包装格式",
+    description: "用 items 包装字符串或 prompt/text 对象。",
+    value: {
+      items: [
+        "第一条完整的视频画面提示词",
+        { text: "第二条完整的视频画面提示词" },
+      ],
+    },
+  },
+  {
+    title: "Master Prompt + Scenes 字符串",
+    description: "公共风格会自动拼到每一条 scene 前面。",
+    value: {
+      master_prompt: "所有镜头统一使用电影级光影和写实质感。",
+      scenes: ["第一条镜头内容", "第二条镜头内容"],
+    },
+  },
+  {
+    title: "Master Prompt + Scenes 对象",
+    description: "scene 对象支持 prompt、visual_prompt 或 text 字段。",
+    value: {
+      master_prompt: "所有镜头统一使用电影级光影和写实质感。",
+      scenes: [
+        { prompt: "第一条镜头内容", subtitle: "第一条字幕" },
+        { visual_prompt: "第二条镜头内容", output_name: "02_scene.mp4" },
+        { text: "第三条镜头内容" },
+      ],
+    },
   },
 ];
 
@@ -110,8 +168,7 @@ function toast(message) {
   window.alert(message);
 }
 
-async function copyPromptTemplate() {
-  const text = JSON.stringify(PROMPT_JSON_EXAMPLE, null, 2);
+async function copyText(text) {
   let copied = false;
   if (navigator.clipboard?.writeText) {
     try {
@@ -135,13 +192,38 @@ async function copyPromptTemplate() {
   if (!copied) {
     throw new Error("浏览器没有授予剪贴板权限");
   }
-  const status = document.querySelector("#prompt-template-copy-status");
-  const button = document.querySelector("#copy-prompt-template-btn");
-  status.textContent = "JSON 格式已复制。";
-  button.textContent = "已复制";
-  window.setTimeout(() => {
-    button.textContent = "复制 JSON 格式";
-  }, 1800);
+}
+
+function promptFormatText(format) {
+  return JSON.stringify(format.value, null, 2);
+}
+
+function renderPromptFormats() {
+  const list = document.querySelector("#prompt-formats-list");
+  list.innerHTML = PROMPT_JSON_FORMATS.map((format, index) => `
+    <article class="prompt-format-card">
+      <header>
+        <div>
+          <strong>${escapeHtml(format.title)}</strong>
+          <p>${escapeHtml(format.description)}</p>
+        </div>
+        <button type="button" class="prompt-format-copy" data-prompt-format-copy="${index}" title="复制 ${escapeHtml(format.title)}" aria-label="复制 ${escapeHtml(format.title)}">
+          <span class="material-symbols-outlined">content_copy</span>
+        </button>
+      </header>
+      <pre class="code-box">${escapeHtml(promptFormatText(format))}</pre>
+      <small class="prompt-format-copy-status" data-prompt-format-status="${index}" aria-live="polite"></small>
+    </article>
+  `).join("");
+}
+
+function openPromptFormats() {
+  renderPromptFormats();
+  document.querySelector("#prompt-formats-modal").classList.remove("hidden");
+}
+
+function closePromptFormats() {
+  document.querySelector("#prompt-formats-modal")?.classList.add("hidden");
 }
 
 function escapeHtml(value) {
@@ -1677,13 +1759,7 @@ function bindEvents() {
   document.querySelectorAll(".mode-pill").forEach((button) => {
     button.addEventListener("click", () => setActiveMode(button.dataset.mode));
   });
-  document.querySelector("#copy-prompt-template-btn").addEventListener("click", async () => {
-    try {
-      await copyPromptTemplate();
-    } catch (error) {
-      document.querySelector("#prompt-template-copy-status").textContent = `复制失败：${error.message}`;
-    }
-  });
+  document.querySelector("#view-prompt-formats-btn").addEventListener("click", openPromptFormats);
   document.querySelector("#workflow-search").addEventListener("input", () => renderProfiles(currentProfiles()));
   document.querySelector("#apply-comfyui-runtime-btn").addEventListener("click", async () => {
     try {
@@ -1756,6 +1832,29 @@ function bindEvents() {
   });
   document.querySelector("#draft-submit-scope").addEventListener("change", updateDraftSelectionStatus);
   document.addEventListener("click", (event) => {
+    const promptFormatCopy = event.target.closest("[data-prompt-format-copy]");
+    if (promptFormatCopy) {
+      const index = Number.parseInt(promptFormatCopy.dataset.promptFormatCopy || "", 10);
+      const format = PROMPT_JSON_FORMATS[index];
+      const status = document.querySelector(`[data-prompt-format-status="${index}"]`);
+      if (format) {
+        copyText(promptFormatText(format))
+          .then(() => {
+            status.textContent = "已复制";
+            window.setTimeout(() => {
+              status.textContent = "";
+            }, 1800);
+          })
+          .catch((error) => {
+            status.textContent = `复制失败：${error.message}`;
+          });
+      }
+      return;
+    }
+    if (event.target.closest("[data-prompt-formats-close]")) {
+      closePromptFormats();
+      return;
+    }
     const previewTarget = event.target.closest("[data-preview-url]");
     if (previewTarget) {
       event.preventDefault();
@@ -1768,6 +1867,7 @@ function bindEvents() {
   });
   document.addEventListener("keydown", (event) => {
     if (event.key === "Escape") {
+      closePromptFormats();
       closeMediaPreview();
     }
   });
