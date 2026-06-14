@@ -2076,7 +2076,10 @@ function bindEvents() {
         await applyHistoryParams(historyParamsApply.dataset.historyParamsApply);
         toast("历史 prompts 和图片已恢复为新的批次预览，可以直接勾选并提交。", "success");
       } catch (error) {
-        toast(error.message);
+        const message = error.message === "Not Found"
+          ? "历史内容恢复功能需要重启工作台后生效。请等待当前批次结束，再从启动台重启 ComfyPilot。"
+          : error.message;
+        toast(message, "error");
       }
       return;
     }
