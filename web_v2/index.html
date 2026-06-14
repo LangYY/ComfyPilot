@@ -8,7 +8,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&family=Plus+Jakarta+Sans:wght@600;700;800&display=swap" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@200..700,0..1&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/assets-v2/styles.css?v=20260613-json-formats-modal">
+    <link rel="stylesheet" href="/assets-v2/styles.css?v=20260614-history-parameters">
   </head>
   <body data-active-tab="submit">
     <header class="topbar">
@@ -50,6 +50,10 @@
                   <span>Active Profile</span>
                   <select id="draft-profile-id"></select>
                 </label>
+                <button id="history-params-btn" type="button" class="ghost-action workflow-history-button">
+                  <span class="material-symbols-outlined">history</span>
+                  历史提交参数
+                </button>
                 <details class="workflow-upload-details">
                   <summary>增加新工作流</summary>
                   <form id="profile-form" class="stack tight-stack">
@@ -315,7 +319,7 @@
             <button type="button" class="side-nav-item active" data-queue-view="dashboard">
               <span class="nav-orb"><span class="material-symbols-outlined">dashboard</span></span>
               <span class="side-nav-text">
-                <strong>Dashboard</strong>
+                <strong>Queue and History</strong>
                 <small>运行队列与历史</small>
               </span>
             </button>
@@ -341,7 +345,7 @@
           <section id="queue-dashboard-view" class="queue-view">
             <header class="queue-titlebar">
               <div>
-                <h1>Queue Dashboard</h1>
+                <h1>Queue and History</h1>
                 <p id="queue-summary">正在读取队列状态...</p>
               </div>
               <button id="stop-all-btn" type="button" class="danger-action">Stop All</button>
@@ -480,6 +484,22 @@
       </section>
     </div>
 
-    <script src="/assets-v2/app.js?v=20260613-freeform-prompt-field"></script>
+    <div id="history-params-modal" class="history-params-modal hidden" role="dialog" aria-modal="true" aria-labelledby="history-params-title">
+      <div class="history-params-backdrop" data-history-params-close></div>
+      <section class="history-params-shell">
+        <header>
+          <div>
+            <strong id="history-params-title">历史提交参数</strong>
+            <p>查看最近提交过的运行参数，并套用到当前 Submit Work。Prompt 和素材不会被带回。</p>
+          </div>
+          <button type="button" class="icon-button" data-history-params-close title="关闭">
+            <span class="material-symbols-outlined">close</span>
+          </button>
+        </header>
+        <div id="history-params-list" class="history-params-list"></div>
+      </section>
+    </div>
+
+    <script src="/assets-v2/app.js?v=20260614-history-parameters"></script>
   </body>
 </html>

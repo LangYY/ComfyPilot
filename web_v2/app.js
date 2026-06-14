@@ -241,6 +241,125 @@ function closePromptFormats() {
   document.querySelector("#prompt-formats-modal")?.classList.add("hidden");
 }
 
+const DRAFT_MODE_LABELS = {
+  t2v: "T2V",
+  i2v_storyboard: "I2V 切图",
+  i2v_first_batch: "I2V 首帧批量",
+  i2v_first_last_batch: "I2V 首尾帧批量",
+  i2v_first_last_continuous: "I2V 连续首尾帧",
+};
+
+function historicalParameterRuns() {
+  return currentRuns()
+    .filter((run) => run?.run_settings && Object.keys(run.run_settings).length)
+    .slice(0, 30);
+}
+
+function historyParamCell(label, value, title = "") {
+  const safeValue = value === null || value === undefined || value === "" ? "-" : value;
+  return `<div><small>${escapeHtml(label)}</small><span title="${escapeHtml(title || safeValue)}">${escapeHtml(safeValue)}</span></div>`;
+}
+
+function renderHistoryParams() {
+  const list = document.querySelector("#history-params-list");
+  const runs = historicalParameterRuns();
+  if (!runs.length) {
+    list.innerHTML = '<div class="history-params-empty">还没有可以调用的历史提交参数。</div>';
+    return;
+  }
+  list.innerHTML = runs.map((run) => {
+    const settings = runtimeSettingsFor(run);
+    const profileExists = currentProfiles().some((profile) => profile.id === run.profile_id);
+    const dimensions = settings.width_pixels && settings.height_pixels
+      ? `${settings.width_pixels} × ${settings.height_pixels}`
+      : "-";
+    const seed = settings.seed_mode === "fixed"
+      ? `固定 ${settings.seed_fixed ?? settings.seed_base ?? 1}`
+      : "随机";
+    const maintenance = Number(settings.maintenance_interval_tasks || 0) > 0
+      ? `每 ${settings.maintenance_interval_tasks} 条 / ${settings.maintenance_cooldown_seconds || 0}s`
+      : "关闭";
+    return `
+      <article class="history-param-card">
+        <div class="history-param-head">
+          <strong>${escapeHtml(profileNameFor(run.profile_id))}</strong>
+          <span class="status-pill ${escapeHtml(run.status || "idle")}">${escapeHtml(RUN_STATUS_LABELS[run.status] || run.status || "-")}</span>
+          <time>${escapeHtml(run.created_at || "-")}</time>
+        </div>
+        <button type="button" class="ghost-action history-param-apply" data-history-params-apply="${escapeHtml(run.id)}" ${profileExists ? "" : "disabled"}>
+          ${profileExists ? "套用这组参数" : "Workflow 已不存在"}
+        </button>
+        <div class="history-param-grid">
+          ${historyParamCell("生成模式", DRAFT_MODE_LABELS[settings.draft_mode] || settings.draft_mode || "未记录，保留当前")}
+          ${historyParamCell("输出尺寸", dimensions)}
+          ${historyParamCell("生成时长", settings.duration_seconds ? `${settings.duration_seconds}s` : "-")}
+          ${historyParamCell("生成遍数", settings.repeat_count || 1)}
+          ${historyParamCell("Seed", seed)}
+          ${historyParamCell("保存子目录", settings.save_prefix_root || "-")}
+          ${historyParamCell("文件名前缀", settings.output_name_prefix || "-")}
+          ${historyParamCell("轻度释放", maintenance)}
+        </div>
+      </article>
+    `;
+  }).join("");
+}
+
+async function openHistoryParams() {
+  if (!state.dashboard) {
+    await loadDashboard();
+  }
+  renderHistoryParams();
+  document.querySelector("#history-params-modal").classList.remove("hidden");
+}
+
+function closeHistoryParams() {
+  document.querySelector("#history-params-modal")?.classList.add("hidden");
+}
+
+function setDurationValue(value) {
+  const select = document.querySelector("#duration-seconds");
+  const normalized = String(value || "");
+  if (!normalized) {
+    return;
+  }
+  if (!Array.from(select.options).some((option) => option.value === normalized)) {
+    select.add(new Option(`${normalized}s`, normalized));
+  }
+  select.value = normalized;
+}
+
+function applyHistoryParams(runId) {
+  const run = findRun(runId);
+  if (!run) {
+    throw new Error("找不到这条历史提交记录。");
+  }
+  const profile = currentProfiles().find((item) => item.id === run.profile_id);
+  if (!profile) {
+    throw new Error("这条记录使用的 Workflow 已不存在，无法套用。");
+  }
+  const settings = runtimeSettingsFor(run);
+  document.querySelector("#draft-profile-id").value = profile.id;
+  renderDurationOptions(profile);
+  document.querySelector("#comfyui-output-dir").value = normalizeSaveSubfolder(settings.save_prefix_root);
+  document.querySelector("#output-name-prefix").value = settings.output_name_prefix || "";
+  document.querySelector("#width-pixels").value = settings.width_pixels || "";
+  document.querySelector("#height-pixels").value = settings.height_pixels || "";
+  setDurationValue(settings.duration_seconds);
+  document.querySelector("#repeat-count").value = settings.repeat_count || 1;
+  document.querySelector("#seed-mode").value = settings.seed_mode === "fixed" ? "fixed" : "random";
+  document.querySelector("#seed-fixed").value = settings.seed_fixed ?? settings.seed_base ?? 1;
+  document.querySelector("#maintenance-interval-tasks").value = settings.maintenance_interval_tasks ?? 5;
+  document.querySelector("#maintenance-cooldown-seconds").value = settings.maintenance_cooldown_seconds ?? 20;
+  if (DRAFT_MODE_LABELS[settings.draft_mode]) {
+    setActiveMode(settings.draft_mode);
+  }
+  syncSizePreset();
+  updateSeedFieldVisibility();
+  renderProfiles(currentProfiles());
+  renderUploadChecklist();
+  closeHistoryParams();
+}
+
 function escapeHtml(value) {
   return String(value ?? "")
     .replaceAll("&", "&amp;")
@@ -1545,6 +1664,9 @@ async function loadDashboard() {
     state.settingsHydrated = true;
   }
   renderModeFields();
+  if (!document.querySelector("#history-params-modal")?.classList.contains("hidden")) {
+    renderHistoryParams();
+  }
   if (state.selectedDraft) {
     const freshDraft = (data.selected_project?.drafts || []).find((draft) => draft.id === state.selectedDraft.id);
     const nextDraft = freshDraft || state.selectedDraft;
@@ -1784,6 +1906,13 @@ function updateWorkflowFileStatus() {
 
 function bindEvents() {
   document.querySelector("#refresh-btn").addEventListener("click", loadDashboard);
+  document.querySelector("#history-params-btn").addEventListener("click", async () => {
+    try {
+      await openHistoryParams();
+    } catch (error) {
+      toast(error.message);
+    }
+  });
   document.querySelector("#access-info-btn").addEventListener("click", async () => {
     try {
       await toggleAccessInfo();
@@ -1896,6 +2025,20 @@ function bindEvents() {
       closePromptFormats();
       return;
     }
+    const historyParamsApply = event.target.closest("[data-history-params-apply]");
+    if (historyParamsApply) {
+      try {
+        applyHistoryParams(historyParamsApply.dataset.historyParamsApply);
+        toast("历史提交参数已套用，请继续提供本批次的 prompt 和素材。");
+      } catch (error) {
+        toast(error.message);
+      }
+      return;
+    }
+    if (event.target.closest("[data-history-params-close]")) {
+      closeHistoryParams();
+      return;
+    }
     const previewTarget = event.target.closest("[data-preview-url]");
     if (previewTarget) {
       event.preventDefault();
@@ -1909,6 +2052,7 @@ function bindEvents() {
   document.addEventListener("keydown", (event) => {
     if (event.key === "Escape") {
       closePromptFormats();
+      closeHistoryParams();
       closeMediaPreview();
     }
   });

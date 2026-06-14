@@ -402,9 +402,22 @@ textarea:focus {
 
 .workflow-row {
   display: grid;
-  grid-template-columns: minmax(360px, 1fr) auto;
+  grid-template-columns: minmax(360px, 1fr) auto auto;
   gap: 14px;
   align-items: end;
+}
+
+.workflow-history-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-height: 46px;
+  white-space: nowrap;
+}
+
+.workflow-history-button .material-symbols-outlined {
+  font-size: 19px;
 }
 
 .workflow-upload-details {
@@ -1618,6 +1631,148 @@ button[data-batch-action] {
   padding: 28px;
 }
 
+.history-params-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 112;
+  display: grid;
+  place-items: center;
+  padding: 28px;
+}
+
+.history-params-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(2, 4, 3, 0.82);
+  backdrop-filter: blur(18px);
+}
+
+.history-params-shell {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  width: min(1040px, 100%);
+  max-height: min(88vh, 860px);
+  overflow: hidden;
+  border: 1px solid rgba(149, 212, 179, 0.24);
+  border-radius: 26px;
+  background: rgba(12, 16, 13, 0.98);
+  box-shadow: 0 28px 90px rgba(0, 0, 0, 0.48);
+}
+
+.history-params-shell > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 18px 20px;
+  border-bottom: 1px solid rgba(149, 212, 179, 0.12);
+}
+
+.history-params-shell > header div {
+  display: grid;
+  gap: 4px;
+}
+
+.history-params-shell > header strong {
+  color: var(--on-surface);
+  font-family: "Plus Jakarta Sans", Inter, sans-serif;
+  font-size: 18px;
+}
+
+.history-params-shell > header p {
+  margin: 0;
+  color: var(--on-variant);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.history-params-list {
+  display: grid;
+  align-content: start;
+  gap: 12px;
+  overflow-y: auto;
+  padding: 18px;
+}
+
+.history-params-empty {
+  padding: 42px 20px;
+  border: 1px dashed rgba(149, 212, 179, 0.2);
+  border-radius: var(--radius);
+  color: var(--on-variant);
+  text-align: center;
+}
+
+.history-param-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 14px 18px;
+  padding: 15px 16px;
+  border: 1px solid rgba(149, 212, 179, 0.14);
+  border-radius: var(--radius);
+  background: rgba(20, 24, 21, 0.78);
+}
+
+.history-param-head {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.history-param-head strong {
+  color: var(--on-surface);
+  font-size: 14px;
+}
+
+.history-param-head time {
+  color: var(--on-variant);
+  font-family: "JetBrains Mono", monospace;
+  font-size: 11px;
+}
+
+.history-param-grid {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.history-param-grid div {
+  min-width: 0;
+  padding: 9px 10px;
+  border-radius: 10px;
+  background: rgba(6, 9, 7, 0.62);
+}
+
+.history-param-grid small,
+.history-param-grid span {
+  display: block;
+}
+
+.history-param-grid small {
+  margin-bottom: 4px;
+  color: var(--on-variant);
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.history-param-grid span {
+  overflow: hidden;
+  color: var(--on-surface);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.history-param-apply {
+  align-self: center;
+  min-height: 38px;
+  white-space: nowrap;
+}
+
 .prompt-formats-backdrop {
   position: absolute;
   inset: 0;
@@ -1857,6 +2012,10 @@ button[data-batch-action] {
     padding: 12px;
   }
 
+  .history-params-modal {
+    padding: 12px;
+  }
+
   .prompt-formats-shell {
     max-height: 94vh;
     border-radius: 20px;
@@ -1865,6 +2024,27 @@ button[data-batch-action] {
   .prompt-formats-list {
     grid-template-columns: 1fr;
     padding: 12px;
+  }
+
+  .history-params-shell {
+    max-height: 94vh;
+    border-radius: 20px;
+  }
+
+  .history-params-list {
+    padding: 12px;
+  }
+
+  .history-param-card {
+    grid-template-columns: 1fr;
+  }
+
+  .history-param-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .history-param-apply {
+    width: 100%;
   }
 
   .bottom-actions .ghost-action {
