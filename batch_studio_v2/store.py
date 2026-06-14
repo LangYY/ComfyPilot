@@ -842,6 +842,109 @@ class StudioStore:
         save_json(self._draft_manifest_path(project_id, draft_id), manifest)
         return manifest
 
+    def create_draft_from_run(
+        self,
+        *,
+        project_id: str,
+        run_id: str,
+        runtime_overrides: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        run = self.load_run(project_id, run_id)
+        batch = self.load_batch(project_id, run["batch_id"])
+        project = self.load_project(project_id)
+        profile = self.load_profile(project_id, batch["profile_id"])
+
+        batch_dir = self._batch_dir(project_id, batch["id"])
+        for task in batch.get("tasks", []):
+            for ref in task.get("input_refs", []):
+                relative_path = Path(str(ref.get("path") or ""))
+                if not relative_path.parts or relative_path.is_absolute() or ".." in relative_path.parts:
+                    raise ValueError(f"Historical input path is invalid: {ref.get('path', '')}")
+                if not (batch_dir / relative_path).is_file():
+                    raise ValueError(f"Historical input is no longer available: {ref.get('path', '')}")
+
+        draft_id = make_id("draft")
+        draft_dir = self._draft_dir(project_id, draft_id)
+        ensure_dir(draft_dir)
+        if (batch_dir / "inputs").exists():
+            copy_tree(batch_dir / "inputs", draft_dir / "inputs")
+        if (batch_dir / "source").exists():
+            copy_tree(batch_dir / "source", draft_dir / "source")
+
+        source_kind = str(batch.get("source_kind") or "prompt_only")
+        draft_modes = {
+            "prompt_only": "t2v",
+            "i2v_storyboard": "i2v_storyboard",
+            "i2v_first_frame_batch": "i2v_first_batch",
+            "i2v_first_batch": "i2v_first_batch",
+            "i2v_first_last_batch": "i2v_first_last_batch",
+            "i2v_first_last_continuous": "i2v_first_last_continuous",
+        }
+        runtime_settings = merge_run_settings(project["default_run_settings"], profile.get("defaults", {}))
+        runtime_settings = merge_run_settings(runtime_settings, runtime_overrides)
+        runtime_settings["draft_mode"] = draft_modes.get(source_kind, "t2v")
+
+        execution_keys = {
+            "status", "prompt_id", "error", "output_path", "submitted_at", "started_at",
+            "finished_at", "wait_seconds", "duration_seconds", "total_seconds", "diagnostics",
+            "draw_index", "draw_count", "source_task_id", "source_order",
+        }
+        base_tasks: list[dict[str, Any]] = []
+        seen_sources: set[str] = set()
+        for task in batch.get("tasks", []):
+            draw_count = int(task.get("draw_count") or 1)
+            source_key = str(task.get("source_task_id") or "")
+            if not source_key and draw_count > 1:
+                source_key = f"order:{task.get('source_order') or task.get('order')}"
+            if not source_key:
+                source_key = str(task.get("task_id") or len(base_tasks) + 1)
+            if source_key in seen_sources:
+                continue
+            seen_sources.add(source_key)
+            task_copy = self._clone_task(task)
+            for key in execution_keys:
+                task_copy.pop(key, None)
+            task_copy["task_id"] = make_id("task")
+            task_copy["order"] = len(base_tasks) + 1
+            task_copy["source_index"] = task_copy.get("source_index") or task_copy["order"]
+            base_tasks.append(task_copy)
+
+        if not base_tasks:
+            raise ValueError("The historical run does not contain reusable prompt tasks.")
+
+        self._apply_seed_policy(base_tasks, runtime_settings)
+        self._refresh_task_runtime_fields(base_tasks, runtime_settings)
+        tasks = self._expand_tasks_for_repeats(base_tasks, runtime_settings)
+
+        source_dir = ensure_dir(draft_dir / "source")
+        prompts_path = source_dir / "prompts.json"
+        prompt_entries = [self._task_prompt_entry(task) for task in base_tasks]
+        save_text(prompts_path, json.dumps(prompt_entries, ensure_ascii=False, indent=2) + "\n")
+
+        manifest = {
+            "id": draft_id,
+            "project_id": project_id,
+            "profile_id": batch["profile_id"],
+            "status": "draft",
+            "source_kind": source_kind,
+            "created_at": now_iso(),
+            "updated_at": now_iso(),
+            "runtime_settings": runtime_settings,
+            "source_files": {"prompts_json": to_relative_string(draft_dir, prompts_path)},
+            "split_config": self._clone_task(batch.get("split_config")),
+            "base_tasks": base_tasks,
+            "tasks": tasks,
+            "task_count": len(tasks),
+            "source_task_count": len(base_tasks),
+            "reused_from": {
+                "run_id": run_id,
+                "batch_id": batch["id"],
+                "created_at": now_iso(),
+            },
+        }
+        save_json(self._draft_manifest_path(project_id, draft_id), manifest)
+        return manifest
+
     def freeze_draft_to_batch(
         self,
         project_id: str,

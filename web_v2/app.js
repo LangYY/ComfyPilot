@@ -179,8 +179,33 @@ async function api(path, options = {}, retryAuth = true) {
   return response.json();
 }
 
-function toast(message) {
-  window.alert(message);
+let toastTimer = null;
+
+function toast(message, tone = "") {
+  const region = document.querySelector("#app-toast-region");
+  if (!region) {
+    return;
+  }
+  const text = String(message || "操作已完成。");
+  const inferredTone = tone || (/失败|错误|无法|未找到|需要|请先|missing|required|error|not found|cannot/i.test(text) ? "error" : "success");
+  const icon = inferredTone === "error" ? "error" : inferredTone === "warning" ? "warning" : "check_circle";
+  region.innerHTML = `
+    <section class="app-toast ${escapeHtml(inferredTone)}" role="status">
+      <span class="material-symbols-outlined app-toast-icon">${icon}</span>
+      <div><strong>${inferredTone === "error" ? "操作未完成" : inferredTone === "warning" ? "请注意" : "操作完成"}</strong><p>${escapeHtml(text)}</p></div>
+      <button type="button" class="app-toast-close" data-toast-close title="关闭"><span class="material-symbols-outlined">close</span></button>
+      <span class="app-toast-progress"></span>
+    </section>
+  `;
+  region.classList.add("visible");
+  window.clearTimeout(toastTimer);
+  toastTimer = window.setTimeout(() => closeToast(), inferredTone === "error" ? 5200 : 3200);
+}
+
+function closeToast() {
+  const region = document.querySelector("#app-toast-region");
+  window.clearTimeout(toastTimer);
+  region?.classList.remove("visible");
 }
 
 async function copyText(text) {
@@ -249,36 +274,64 @@ const DRAFT_MODE_LABELS = {
   i2v_first_last_continuous: "I2V 连续首尾帧",
 };
 
-function historicalParameterRuns() {
+function historicalContentRuns() {
+  const seenBatches = new Set();
   return currentRuns()
-    .filter((run) => run?.run_settings && Object.keys(run.run_settings).length)
+    .filter((run) => {
+      if (!run?.run_settings || !Object.keys(run.run_settings).length) {
+        return false;
+      }
+      const contentKey = run.batch_id || run.id;
+      if (seenBatches.has(contentKey)) {
+        return false;
+      }
+      seenBatches.add(contentKey);
+      return true;
+    })
     .slice(0, 30);
 }
 
-function historyParamCell(label, value, title = "") {
-  const safeValue = value === null || value === undefined || value === "" ? "-" : value;
-  return `<div><small>${escapeHtml(label)}</small><span title="${escapeHtml(title || safeValue)}">${escapeHtml(safeValue)}</span></div>`;
+function batchForRun(run) {
+  return currentBatches().find((batch) => batch.id === run?.batch_id) || null;
+}
+
+function historicalContentTasks(run) {
+  return batchForRun(run)?.tasks || run?.tasks || [];
+}
+
+function historicalContentImages(tasks) {
+  const seen = new Set();
+  const images = [];
+  for (const task of tasks) {
+    for (const ref of task.input_urls || []) {
+      const key = ref.url || ref.path;
+      if (!key || seen.has(key)) {
+        continue;
+      }
+      seen.add(key);
+      images.push(ref);
+    }
+  }
+  return images;
 }
 
 function renderHistoryParams() {
   const list = document.querySelector("#history-params-list");
-  const runs = historicalParameterRuns();
+  const runs = historicalContentRuns();
   if (!runs.length) {
     list.innerHTML = '<div class="history-params-empty">还没有可以调用的历史提交参数。</div>';
     return;
   }
   list.innerHTML = runs.map((run) => {
     const settings = runtimeSettingsFor(run);
+    const tasks = historicalContentTasks(run);
+    const images = historicalContentImages(tasks);
     const profileExists = currentProfiles().some((profile) => profile.id === run.profile_id);
-    const dimensions = settings.width_pixels && settings.height_pixels
-      ? `${settings.width_pixels} × ${settings.height_pixels}`
-      : "-";
-    const seed = settings.seed_mode === "fixed"
-      ? `固定 ${settings.seed_fixed ?? settings.seed_base ?? 1}`
-      : "随机";
-    const maintenance = Number(settings.maintenance_interval_tasks || 0) > 0
-      ? `每 ${settings.maintenance_interval_tasks} 条 / ${settings.maintenance_cooldown_seconds || 0}s`
-      : "关闭";
+    const promptPreview = tasks[0]?.prompt_text || "没有可预览的 prompt";
+    const imagePreview = images.slice(0, 4).map((ref) => {
+      const url = withAccessToken(ref.url || "");
+      return `<button type="button" class="history-content-thumb" data-preview-url="${escapeHtml(url)}" data-preview-title="${escapeHtml(ref.label || "历史输入图片")}"><img src="${escapeHtml(url)}" alt="${escapeHtml(ref.label || "历史输入图片")}" loading="lazy"></button>`;
+    }).join("");
     return `
       <article class="history-param-card">
         <div class="history-param-head">
@@ -287,18 +340,15 @@ function renderHistoryParams() {
           <time>${escapeHtml(run.created_at || "-")}</time>
         </div>
         <button type="button" class="ghost-action history-param-apply" data-history-params-apply="${escapeHtml(run.id)}" ${profileExists ? "" : "disabled"}>
-          ${profileExists ? "套用这组参数" : "Workflow 已不存在"}
+          ${profileExists ? "恢复到提交页" : "Workflow 已不存在"}
         </button>
-        <div class="history-param-grid">
-          ${historyParamCell("生成模式", DRAFT_MODE_LABELS[settings.draft_mode] || settings.draft_mode || "未记录，保留当前")}
-          ${historyParamCell("输出尺寸", dimensions)}
-          ${historyParamCell("生成时长", settings.duration_seconds ? `${settings.duration_seconds}s` : "-")}
-          ${historyParamCell("生成遍数", settings.repeat_count || 1)}
-          ${historyParamCell("Seed", seed)}
-          ${historyParamCell("保存子目录", settings.save_prefix_root || "-")}
-          ${historyParamCell("文件名前缀", settings.output_name_prefix || "-")}
-          ${historyParamCell("轻度释放", maintenance)}
+        <div class="history-content-summary">
+          <span>${escapeHtml(DRAFT_MODE_LABELS[settings.draft_mode] || "历史批次")}</span>
+          <span>${tasks.length} 条 prompt</span>
+          <span>${images.length} 张图片</span>
         </div>
+        <p class="history-prompt-preview">${escapeHtml(promptPreview)}</p>
+        ${imagePreview ? `<div class="history-content-thumbs">${imagePreview}${images.length > 4 ? `<span>+${images.length - 4}</span>` : ""}</div>` : '<div class="history-content-no-images">纯文本批次，没有输入图片</div>'}
       </article>
     `;
   }).join("");
@@ -328,7 +378,7 @@ function setDurationValue(value) {
   select.value = normalized;
 }
 
-function applyHistoryParams(runId) {
+async function applyHistoryParams(runId) {
   const run = findRun(runId);
   if (!run) {
     throw new Error("找不到这条历史提交记录。");
@@ -337,27 +387,22 @@ function applyHistoryParams(runId) {
   if (!profile) {
     throw new Error("这条记录使用的 Workflow 已不存在，无法套用。");
   }
-  const settings = runtimeSettingsFor(run);
+  const project = currentProject();
+  const data = await api(`/api/projects/${project.id}/runs/${runId}/reuse-as-draft`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ runtime_overrides: runtimeOverrides() }),
+  });
   document.querySelector("#draft-profile-id").value = profile.id;
   renderDurationOptions(profile);
-  document.querySelector("#comfyui-output-dir").value = normalizeSaveSubfolder(settings.save_prefix_root);
-  document.querySelector("#output-name-prefix").value = settings.output_name_prefix || "";
-  document.querySelector("#width-pixels").value = settings.width_pixels || "";
-  document.querySelector("#height-pixels").value = settings.height_pixels || "";
-  setDurationValue(settings.duration_seconds);
-  document.querySelector("#repeat-count").value = settings.repeat_count || 1;
-  document.querySelector("#seed-mode").value = settings.seed_mode === "fixed" ? "fixed" : "random";
-  document.querySelector("#seed-fixed").value = settings.seed_fixed ?? settings.seed_base ?? 1;
-  document.querySelector("#maintenance-interval-tasks").value = settings.maintenance_interval_tasks ?? 5;
-  document.querySelector("#maintenance-cooldown-seconds").value = settings.maintenance_cooldown_seconds ?? 20;
-  if (DRAFT_MODE_LABELS[settings.draft_mode]) {
-    setActiveMode(settings.draft_mode);
+  const mode = data.draft?.runtime_settings?.draft_mode;
+  if (DRAFT_MODE_LABELS[mode]) {
+    setActiveMode(mode);
   }
-  syncSizePreset();
-  updateSeedFieldVisibility();
-  renderProfiles(currentProfiles());
-  renderUploadChecklist();
+  renderDraftPreview(data.draft);
+  await loadDashboard();
   closeHistoryParams();
+  document.querySelector("#draft-status")?.scrollIntoView({ behavior: "smooth", block: "center" });
 }
 
 function escapeHtml(value) {
@@ -2001,7 +2046,7 @@ function bindEvents() {
     updateDraftSelectionStatus();
   });
   document.querySelector("#draft-submit-scope").addEventListener("change", updateDraftSelectionStatus);
-  document.addEventListener("click", (event) => {
+  document.addEventListener("click", async (event) => {
     const promptFormatCopy = event.target.closest("[data-prompt-format-copy]");
     if (promptFormatCopy) {
       const index = Number.parseInt(promptFormatCopy.dataset.promptFormatCopy || "", 10);
@@ -2028,8 +2073,8 @@ function bindEvents() {
     const historyParamsApply = event.target.closest("[data-history-params-apply]");
     if (historyParamsApply) {
       try {
-        applyHistoryParams(historyParamsApply.dataset.historyParamsApply);
-        toast("历史提交参数已套用，请继续提供本批次的 prompt 和素材。");
+        await applyHistoryParams(historyParamsApply.dataset.historyParamsApply);
+        toast("历史 prompts 和图片已恢复为新的批次预览，可以直接勾选并提交。", "success");
       } catch (error) {
         toast(error.message);
       }
@@ -2037,6 +2082,10 @@ function bindEvents() {
     }
     if (event.target.closest("[data-history-params-close]")) {
       closeHistoryParams();
+      return;
+    }
+    if (event.target.closest("[data-toast-close]")) {
+      closeToast();
       return;
     }
     const previewTarget = event.target.closest("[data-preview-url]");

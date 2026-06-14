@@ -1570,7 +1570,7 @@ button[data-batch-action] {
 .media-preview-modal {
   position: fixed;
   inset: 0;
-  z-index: 100;
+  z-index: 160;
   display: grid;
   place-items: center;
   padding: 34px;
@@ -1732,45 +1732,172 @@ button[data-batch-action] {
   font-size: 11px;
 }
 
-.history-param-grid {
-  grid-column: 1 / -1;
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 8px;
-}
-
-.history-param-grid div {
-  min-width: 0;
-  padding: 9px 10px;
-  border-radius: 10px;
-  background: rgba(6, 9, 7, 0.62);
-}
-
-.history-param-grid small,
-.history-param-grid span {
-  display: block;
-}
-
-.history-param-grid small {
-  margin-bottom: 4px;
-  color: var(--on-variant);
-  font-size: 10px;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-}
-
-.history-param-grid span {
-  overflow: hidden;
-  color: var(--on-surface);
-  font-size: 12px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
 .history-param-apply {
   align-self: center;
   min-height: 38px;
   white-space: nowrap;
+}
+
+.history-content-summary {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.history-content-summary span {
+  padding: 5px 9px;
+  border: 1px solid rgba(149, 212, 179, 0.14);
+  border-radius: 999px;
+  color: var(--primary);
+  background: rgba(149, 212, 179, 0.06);
+  font-size: 11px;
+}
+
+.history-prompt-preview {
+  grid-column: 1 / -1;
+  display: -webkit-box;
+  margin: 0;
+  overflow: hidden;
+  color: var(--on-variant);
+  font-size: 12px;
+  line-height: 1.6;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.history-content-thumbs {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.history-content-thumb {
+  width: 58px;
+  height: 58px;
+  overflow: hidden;
+  border: 1px solid rgba(149, 212, 179, 0.18);
+  border-radius: 12px;
+  padding: 0;
+  background: #080b09;
+  cursor: pointer;
+}
+
+.history-content-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.history-content-thumbs > span,
+.history-content-no-images {
+  color: var(--on-variant);
+  font-size: 11px;
+}
+
+.history-content-no-images {
+  grid-column: 1 / -1;
+}
+
+.app-toast-region {
+  position: fixed;
+  inset: 0;
+  z-index: 180;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  pointer-events: none;
+  opacity: 0;
+  transform: scale(0.97);
+  transition: opacity 180ms ease, transform 180ms ease;
+}
+
+.app-toast-region.visible {
+  opacity: 1;
+  transform: scale(1);
+}
+
+.app-toast {
+  position: relative;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 13px;
+  width: min(480px, 100%);
+  overflow: hidden;
+  border: 1px solid rgba(149, 212, 179, 0.3);
+  border-radius: 20px;
+  padding: 16px 16px 18px;
+  background: rgba(17, 22, 18, 0.96);
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.48), 0 0 38px rgba(149, 212, 179, 0.08);
+  backdrop-filter: blur(20px);
+  pointer-events: auto;
+}
+
+.app-toast.error {
+  border-color: rgba(255, 135, 120, 0.42);
+}
+
+.app-toast-icon {
+  color: var(--primary);
+  font-size: 28px;
+}
+
+.app-toast.error .app-toast-icon {
+  color: #ff8e7f;
+}
+
+.app-toast strong,
+.app-toast p {
+  display: block;
+  margin: 0;
+}
+
+.app-toast strong {
+  margin-bottom: 3px;
+  color: var(--on-surface);
+  font-size: 13px;
+}
+
+.app-toast p {
+  color: var(--on-variant);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.app-toast-close {
+  display: grid;
+  place-items: center;
+  border: 0;
+  padding: 4px;
+  color: var(--on-variant);
+  background: transparent;
+  cursor: pointer;
+}
+
+.app-toast-close .material-symbols-outlined {
+  font-size: 19px;
+}
+
+.app-toast-progress {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, var(--primary), transparent);
+  animation: toast-progress 3.2s linear forwards;
+}
+
+.app-toast.error .app-toast-progress {
+  background: linear-gradient(90deg, transparent, #ff8e7f, transparent);
+  animation-duration: 5.2s;
+}
+
+@keyframes toast-progress {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(100%); }
 }
 
 .prompt-formats-backdrop {
@@ -2037,10 +2164,6 @@ button[data-batch-action] {
 
   .history-param-card {
     grid-template-columns: 1fr;
-  }
-
-  .history-param-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .history-param-apply {

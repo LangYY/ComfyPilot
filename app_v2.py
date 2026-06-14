@@ -819,6 +819,21 @@ def retry_run(project_id: str, run_id: str) -> dict[str, Any]:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
+@app.post("/api/projects/{project_id}/runs/{run_id}/reuse-as-draft")
+def reuse_run_as_draft(project_id: str, run_id: str, payload: dict[str, Any] | None = None) -> dict[str, Any]:
+    try:
+        draft = store.create_draft_from_run(
+            project_id=project_id,
+            run_id=run_id,
+            runtime_overrides=runtime_overrides_from_payload(payload),
+        )
+        return {"ok": True, "draft": serialize_draft(project_id, draft)}
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
 @app.post("/api/projects/{project_id}/runs/{run_id}/tasks/{task_id}/retry")
 def retry_run_task(project_id: str, run_id: str, task_id: str) -> dict[str, Any]:
     try:

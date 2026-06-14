@@ -8,7 +8,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&family=Plus+Jakarta+Sans:wght@600;700;800&display=swap" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@200..700,0..1&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/assets-v2/styles.css?v=20260614-history-parameters">
+    <link rel="stylesheet" href="/assets-v2/styles.css?v=20260614-history-content-toast">
   </head>
   <body data-active-tab="submit">
     <header class="topbar">
@@ -52,7 +52,7 @@
                 </label>
                 <button id="history-params-btn" type="button" class="ghost-action workflow-history-button">
                   <span class="material-symbols-outlined">history</span>
-                  历史提交参数
+                  历史提交内容
                 </button>
                 <details class="workflow-upload-details">
                   <summary>增加新工作流</summary>
@@ -489,8 +489,8 @@
       <section class="history-params-shell">
         <header>
           <div>
-            <strong id="history-params-title">历史提交参数</strong>
-            <p>查看最近提交过的运行参数，并套用到当前 Submit Work。Prompt 和素材不会被带回。</p>
+            <strong id="history-params-title">历史提交内容</strong>
+            <p>查看之前提交的 prompts 和图片，并复制为一份新的批次预览。原历史记录不会被修改。</p>
           </div>
           <button type="button" class="icon-button" data-history-params-close title="关闭">
             <span class="material-symbols-outlined">close</span>
@@ -500,6 +500,8 @@
       </section>
     </div>
 
-    <script src="/assets-v2/app.js?v=20260614-history-parameters"></script>
+    <div id="app-toast-region" class="app-toast-region" aria-live="polite" aria-atomic="true"></div>
+
+    <script src="/assets-v2/app.js?v=20260614-history-content-toast"></script>
   </body>
 </html>
